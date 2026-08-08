@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=2.4.0" />
+  <link rel="stylesheet" href="style.css?v=3.0.0" />
 </head>
 <body>
   <div id="app">
@@ -89,7 +89,53 @@
           </section>
         </section>
       </section>
-    </main>
+    
+<section id="constructionAdmin" class="panel admin-panel hidden">
+  <div class="section-kicker">CHANTIER</div>
+  <h2>Gestion chantier avancée</h2>
+  <div class="grid-2">
+    <label>Numéro de projet<input id="projectNumberInput" placeholder="Ex. EM-2026-014"></label>
+    <label>Contremaître<input id="foremanInput" placeholder="Nom du contremaître"></label>
+  </div>
+  <label>Adresse du chantier<input id="siteAddressInput" placeholder="123 rue Exemple, Ville"></label>
+  <div class="grid-3">
+    <label>Latitude<input id="siteLatInput" inputmode="decimal"></label>
+    <label>Longitude<input id="siteLngInput" inputmode="decimal"></label>
+    <label>Rayon géofence (m)<input id="siteRadiusInput" type="number" min="25" step="25" value="250"></label>
+  </div>
+  <div class="row-actions">
+    <button id="useCurrentLocationBtn" class="btn-secondary">Utiliser ma position</button>
+    <button id="saveSiteDetailsBtn" class="btn-primary">Enregistrer les détails</button>
+  </div>
+  <p class="muted">Le géofence valide la position au moment du punch. Sans coordonnées, le punch reste permis.</p>
+</section>
+
+<section id="dailyNoteSection" class="panel">
+  <div class="section-kicker">JOURNAL</div>
+  <h2>Note quotidienne</h2>
+  <textarea id="dailyNoteInput" rows="3" placeholder="Travaux effectués, retard, matériel, observation..."></textarea>
+  <label>Photo facultative<input id="dailyPhotoInput" type="file" accept="image/*" capture="environment"></label>
+  <button id="saveDailyNoteBtn" class="btn-secondary">Enregistrer la note</button>
+  <div id="dailyNoteStatus" class="muted"></div>
+</section>
+
+<section id="approvalAdmin" class="panel admin-panel hidden">
+  <div class="section-kicker">APPROBATION</div>
+  <h2>Heures à approuver</h2>
+  <div id="approvalList"></div>
+</section>
+
+<section id="siteReportsAdmin" class="panel admin-panel hidden">
+  <div class="section-kicker">RAPPORTS</div>
+  <h2>Rapports par chantier</h2>
+  <div class="row-actions">
+    <button id="refreshSiteReportsBtn" class="btn-secondary">Actualiser</button>
+    <button id="exportPayrollBtn" class="btn-primary">Exporter paie CSV</button>
+  </div>
+  <div id="siteReportsList"></div>
+</section>
+
+</main>
   </div>
 
   <div id="editModal" class="modal hidden">
@@ -103,6 +149,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=2.4.0"></script>
+  <script type="module" src="app.js?v=3.0.0"></script>
 </body>
 </html>

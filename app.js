@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '3.0.0';
 
 
 
@@ -229,3 +229,156 @@ onAuthStateChanged(auth,async user=>{
 });
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
+
+
+// ===== Punch Travail v3.0 chantier =====
+function v3el(id){ return document.getElementById(id); }
+
+function v3toMillis(v){
+  if (!v) return 0;
+  if (typeof v.toMillis === "function") return v.toMillis();
+  if (v.seconds) return v.seconds * 1000;
+  const d = new Date(v); return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function v3distanceM(a,b,c,d){
+  const R=6371000, rad=x=>x*Math.PI/180;
+  const d1=rad(c-a), d2=rad(d-b);
+  const q=Math.sin(d1/2)**2 + Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(d2/2)**2;
+  return 2*R*Math.asin(Math.sqrt(q));
+}
+
+function v3gps(){
+  return new Promise((resolve,reject)=>{
+    if(!navigator.geolocation) return reject(new Error("GPS non disponible"));
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),
+      e=>reject(new Error(e.message||"Position refusée")),
+      {enableHighAccuracy:true,timeout:15000,maximumAge:15000}
+    );
+  });
+}
+
+function v3siteSelect(){
+  return v3el("siteSelect") || document.querySelector('select[name="site"]') || document.querySelector("select");
+}
+
+async function v3selectedSite(){
+  const id=v3siteSelect()?.value;
+  if(!id) return null;
+  const s=await getDoc(doc(db,"sites",id));
+  return s.exists()?{id:s.id,...s.data()}:null;
+}
+
+async function v3loadSiteDetails(){
+  const s=await v3selectedSite(); if(!s) return;
+  if(v3el("projectNumberInput")) v3el("projectNumberInput").value=s.projectNumber||"";
+  if(v3el("foremanInput")) v3el("foremanInput").value=s.foreman||"";
+  if(v3el("siteAddressInput")) v3el("siteAddressInput").value=s.address||"";
+  if(v3el("siteLatInput")) v3el("siteLatInput").value=s.lat??"";
+  if(v3el("siteLngInput")) v3el("siteLngInput").value=s.lng??"";
+  if(v3el("siteRadiusInput")) v3el("siteRadiusInput").value=s.radiusM||250;
+}
+
+async function v3saveSiteDetails(){
+  const s=await v3selectedSite(); if(!s) return alert("Choisis un chantier.");
+  await setDoc(doc(db,"sites",s.id),{
+    projectNumber:(v3el("projectNumberInput")?.value||"").trim(),
+    foreman:(v3el("foremanInput")?.value||"").trim(),
+    address:(v3el("siteAddressInput")?.value||"").trim(),
+    lat:Number(v3el("siteLatInput")?.value)||null,
+    lng:Number(v3el("siteLngInput")?.value)||null,
+    radiusM:Number(v3el("siteRadiusInput")?.value)||250,
+    updatedAt:serverTimestamp()
+  },{merge:true});
+  alert("Détails du chantier enregistrés.");
+}
+
+async function v3checkGeofence(){
+  const s=await v3selectedSite();
+  if(!s || s.lat==null || s.lng==null || !s.radiusM) return {ok:true,bypass:true,site:s};
+  const g=await v3gps();
+  const d=v3distanceM(g.lat,g.lng,Number(s.lat),Number(s.lng));
+  return {ok:d<=Number(s.radiusM),distance:d,site:s,gps:g};
+}
+
+async function v3saveDailyNote(){
+  const u=auth.currentUser; if(!u) return;
+  const s=await v3selectedSite(); if(!s) return alert("Choisis un chantier.");
+  let photoData=null;
+  const f=v3el("dailyPhotoInput")?.files?.[0];
+  if(f){
+    if(f.size>900000) return alert("Photo trop lourde (max 900 Ko).");
+    photoData=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});
+  }
+  await addDoc(collection(db,"dailyNotes"),{
+    userId:u.uid,userEmail:u.email||"",siteId:s.id,siteName:s.name||s.title||"",
+    projectNumber:s.projectNumber||"",note:(v3el("dailyNoteInput")?.value||"").trim(),
+    photoData,createdAt:serverTimestamp()
+  });
+  v3el("dailyNoteInput").value="";
+  if(v3el("dailyPhotoInput")) v3el("dailyPhotoInput").value="";
+  if(v3el("dailyNoteStatus")) v3el("dailyNoteStatus").textContent="Note enregistrée.";
+}
+
+function v3hours(p){
+  const a=v3toMillis(p.startTime||p.clockIn||p.createdAt), b=v3toMillis(p.endTime||p.clockOut);
+  return a&&b&&b>=a?(b-a)/3600000:0;
+}
+
+async function v3approvals(){
+  const box=v3el("approvalList"); if(!box) return;
+  const q=await getDocs(collection(db,"punches"));
+  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>(p.endTime||p.clockOut)&&p.approved!==true);
+  box.innerHTML=rows.length?rows.map(p=>`<div class="approval-item"><strong>${p.userName||p.userEmail||"Employé"}</strong><span>${p.siteName||p.site||"Chantier"} — ${v3hours(p).toFixed(2)} h</span><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
+  box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});v3approvals();});
+}
+
+async function v3reports(){
+  const box=v3el("siteReportsList"); if(!box) return;
+  const q=await getDocs(collection(db,"punches")), g={};
+  q.docs.forEach(d=>{const p=d.data(), n=p.siteName||p.site||"Sans chantier"; if(!g[n])g[n]={h:0,a:0,c:0}; const h=v3hours(p); g[n].h+=h; if(p.approved===true)g[n].a+=h; g[n].c++;});
+  const rows=Object.entries(g).sort((a,b)=>b[1].h-a[1].h);
+  box.innerHTML=rows.length?rows.map(([n,v])=>`<div class="report-item"><strong>${n}</strong><span>${v.h.toFixed(2)} h totales</span><span>${v.a.toFixed(2)} h approuvées</span><span>${v.c} punch(s)</span></div>`).join(""):'<p class="muted">Aucune donnée.</p>';
+}
+
+async function v3exportPayroll(){
+  const q=await getDocs(collection(db,"punches"));
+  const rows=q.docs.map(d=>d.data()).filter(p=>(p.endTime||p.clockOut)&&p.approved===true);
+  const out=[["Employé","Courriel","Chantier","Projet","Entrée","Sortie","Heures"]];
+  rows.forEach(p=>{
+    const a=new Date(v3toMillis(p.startTime||p.clockIn)), b=new Date(v3toMillis(p.endTime||p.clockOut));
+    out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),v3hours(p).toFixed(2)]);
+  });
+  const csv=out.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="punch-travail-paie.csv";a.click();URL.revokeObjectURL(url);
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  v3el("saveSiteDetailsBtn")?.addEventListener("click",v3saveSiteDetails);
+  v3el("useCurrentLocationBtn")?.addEventListener("click",async()=>{try{const g=await v3gps();v3el("siteLatInput").value=g.lat.toFixed(7);v3el("siteLngInput").value=g.lng.toFixed(7);}catch(e){alert(e.message);}});
+  v3el("saveDailyNoteBtn")?.addEventListener("click",v3saveDailyNote);
+  v3el("refreshSiteReportsBtn")?.addEventListener("click",v3reports);
+  v3el("exportPayrollBtn")?.addEventListener("click",v3exportPayroll);
+  v3siteSelect()?.addEventListener("change",v3loadSiteDetails);
+
+  const sync=()=>{
+    const isAdmin=(document.body.innerText||"").includes("Administrateur");
+    ["constructionAdmin","approvalAdmin","siteReportsAdmin"].forEach(id=>v3el(id)?.classList.toggle("hidden",!isAdmin));
+    if(isAdmin){v3approvals().catch(console.warn);v3reports().catch(console.warn);}
+  };
+  setTimeout(sync,700); setInterval(sync,5000);
+});
+
+// géofence avant punch entrée
+document.addEventListener("click",async ev=>{
+  const b=ev.target?.closest?.("button"); if(!b) return;
+  if(!(b.textContent||"").toLowerCase().includes("punch entrée")) return;
+  if(b.dataset.v3ok==="1"){delete b.dataset.v3ok;return;}
+  try{
+    const r=await v3checkGeofence();
+    if(!r.ok){ev.preventDefault();ev.stopImmediatePropagation();return alert(`Tu es à environ ${Math.round(r.distance)} m du chantier. Rayon autorisé : ${r.site.radiusM} m.`);}
+    if(!r.bypass){ev.preventDefault();ev.stopImmediatePropagation();b.dataset.v3ok="1";b.click();}
+  }catch(e){ev.preventDefault();ev.stopImmediatePropagation();alert("Impossible de valider le GPS : "+e.message);}
+},true);

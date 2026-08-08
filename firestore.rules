@@ -46,6 +46,15 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
 
+
+    // Notes quotidiennes chantier
+    match /dailyNotes/{noteId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn();
+      allow delete: if false;
+    }
+
     // Paramètres
     match /settings/{document=**} {
       allow read, write: if signedIn();

@@ -1,23 +1,19 @@
-# Punch Travail v2.4
+# Punch Travail v3.0 — Chantier
 
-Correctifs principaux :
+Ajouts :
+- géofence par chantier;
+- adresse, numéro de projet et contremaître;
+- latitude/longitude + rayon configurable;
+- note quotidienne;
+- photo facultative;
+- approbation des heures;
+- rapports par chantier;
+- export CSV paie;
+- aucune gestion de pause.
 
-- Suppression des requêtes Firestore composées inutiles qui déclenchaient
-  **The query requires an index**.
-- Tri des punchs effectué côté application lorsque possible.
-- Interface iPhone remise en **pleine largeur**.
-- Viewport mobile corrigé.
-- Cache busting ajouté à `app.js` et `style.css`.
-- Le punch actif existant dans Firestore est conservé.
-- Compte propriétaire : `benoit2568@hotmail.com`
-- Aucune gestion de pause.
+Compte propriétaire : `benoit2568@hotmail.com`
 
-## Installation
+Important : la v3.0 ajoute la collection `dailyNotes`.
+Dans Firebase > Cloud Firestore > Règles, remplace les règles par le fichier `firestore.rules` inclus puis publie.
 
-1. Remplacer les fichiers du dépôt GitHub par ceux de ce ZIP.
-2. Faire **Commit changes**.
-3. Attendre 1 à 2 minutes que GitHub Pages se mette à jour.
-4. Sur iPhone, fermer complètement la page puis la rouvrir.
-5. Si l'ancienne mise en page reste affichée, actualiser une seconde fois.
-
-Aucun changement de règle Firestore n'est normalement requis pour ce correctif.
+Ensuite, remplace les fichiers GitHub par ceux du ZIP et fais Commit changes.

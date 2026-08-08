@@ -1,40 +1,54 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
-    function isAdmin() { return signedIn() && userDoc().data.role == 'admin'; }
-    function isActive() { return signedIn() && userDoc().data.active != false; }
 
-    match /users/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.role == 'employee';
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.active == resource.data.active);
-      allow delete: if false;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    match /sites/{siteId} {
+    // Profils utilisateurs
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /sessions/{sessionId} {
-      allow create: if isActive() && request.resource.data.userId == request.auth.uid;
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() || (isActive() && resource.data.userId == request.auth.uid
-        && resource.data.status == 'open'
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.startAt == resource.data.startAt);
-      allow delete: if isAdmin();
-    }
-
-    match /correctionRequests/{requestId} {
-      allow create: if isActive() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'pending';
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin();
+      allow update: if signedIn();
       allow delete: if false;
+    }
+
+    // Chantiers
+    match /sites/{siteId} {
+      allow read, write: if signedIn();
+    }
+
+    // Punchs / feuilles de temps
+    match /punches/{punchId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+                    && request.resource.data.userId == request.auth.uid;
+
+      allow update: if signedIn();
+      allow delete: if false;
+    }
+
+    // Demandes de correction
+    match /correctionRequests/{requestId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    // Présence, réservé pour les fonctions futures
+    match /presence/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+                            && request.auth.uid == userId;
+      allow delete: if signedIn();
+    }
+
+    // Paramètres
+    match /settings/{document=**} {
+      allow read, write: if signedIn();
     }
   }
 }

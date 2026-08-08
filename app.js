@@ -13,6 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
+const APP_VERSION = '2.3.0';
 
 
 
@@ -91,7 +92,7 @@ async function renameSite(id){const site=(await getDoc(doc(db,'sites',id))).data
 async function toggleSite(id,isActive){await updateDoc(doc(db,'sites',id),{active:!isActive,updatedAt:serverTimestamp()});await loadSites()}
 
 async function findOpenSession(){
-  const qy=query(collection(db,'sessions'),where('userId','==',currentUser.uid),where('status','==','open'));
+  const qy=query(collection(db,'punches'),where('userId','==',currentUser.uid),where('status','==','open'));
   const snap=await getDocs(qy); currentOpenSession=snap.empty?null:{id:snap.docs[0].id,...snap.docs[0].data()}; renderPresence();
 }
 function renderPresence(){
@@ -108,20 +109,20 @@ async function punchIn(){
     if(currentOpenSession)return; const siteId=$('siteSelect').value;if(!siteId)throw new Error('Choisis un chantier.');
     $('punchInBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
     const site=allSites.find(s=>s.id===siteId);
-    await addDoc(collection(db,'sessions'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
+    await addDoc(collection(db,'punches'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
     $('gpsStatus').textContent=`Entrée enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
   }catch(e){$('gpsStatus').textContent=e.message;$('punchInBtn').disabled=false}
 }
 async function punchOut(){
   try{
     if(!currentOpenSession)return;$('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
-    await updateDoc(doc(db,'sessions',currentOpenSession.id),{endAt:serverTimestamp(),status:'closed',endGps:gps,updatedAt:serverTimestamp()});
+    await updateDoc(doc(db,'punches',currentOpenSession.id),{endAt:serverTimestamp(),status:'closed',endGps:gps,updatedAt:serverTimestamp()});
     $('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
   }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
 
 async function loadHistory(){
-  const snap=await getDocs(query(collection(db,'sessions'),where('userId','==',currentUser.uid),orderBy('startAt','desc')));
+  const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid),orderBy('startAt','desc')));
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
   $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6">Aucun punch.</td></tr>';
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
@@ -132,11 +133,11 @@ async function loadHistory(){
 
 async function loadAdmin(){
   if(currentProfile?.role!=='admin')return;
-  const openSnap=await getDocs(query(collection(db,'sessions'),where('status','==','open')));
+  const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
   const present=openSnap.docs.map(d=>({id:d.id,...d.data()}));
   $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
 
-  const snap=await getDocs(query(collection(db,'sessions'),orderBy('startAt','desc')));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
+  const snap=await getDocs(query(collection(db,'punches'),orderBy('startAt','desc')));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
   $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="7">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   await loadEmployees(); await loadCorrections();
@@ -163,7 +164,7 @@ async function saveEdit(){
     if(!editingSession)return; const start=$('editStart').value,end=$('editEnd').value;
     if(!start)throw new Error('L’heure d’entrée est obligatoire.'); if(end && new Date(end)<=new Date(start))throw new Error('La sortie doit être après l’entrée.');
     if(editingAsAdmin){
-      await updateDoc(doc(db,'sessions',editingSession.id),{startAt:Timestamp.fromDate(new Date(start)),endAt:end?Timestamp.fromDate(new Date(end)):null,status:end?'closed':'open',updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid});
+      await updateDoc(doc(db,'punches',editingSession.id),{startAt:Timestamp.fromDate(new Date(start)),endAt:end?Timestamp.fromDate(new Date(end)):null,status:end?'closed':'open',updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid});
       closeEdit();await refreshAll();return;
     }
     const reason=$('editReason').value.trim();if(!reason)throw new Error('Inscris la raison de la correction.');
@@ -180,7 +181,7 @@ async function loadCorrections(){
 async function reviewCorrection(id,approve){
   const snap=await getDoc(doc(db,'correctionRequests',id));if(!snap.exists())return;const r=snap.data();
   try{
-    if(approve){await updateDoc(doc(db,'sessions',r.sessionId),{startAt:r.requestedStart,endAt:r.requestedEnd||null,status:r.requestedEnd?'closed':'open',updatedAt:serverTimestamp(),corrected:true});}
+    if(approve){await updateDoc(doc(db,'punches',r.sessionId),{startAt:r.requestedStart,endAt:r.requestedEnd||null,status:r.requestedEnd?'closed':'open',updatedAt:serverTimestamp(),corrected:true});}
     await updateDoc(doc(db,'correctionRequests',id),{status:approve?'approved':'rejected',reviewedAt:serverTimestamp(),reviewedBy:currentUser.uid});await refreshAll();
   }catch(e){alert('Impossible de traiter la demande : '+e.message)}
 }

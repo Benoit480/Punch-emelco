@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
-const OWNER_EMAIL = 'Benoit2568@hotmail.com';
+const OWNER_EMAIL = 'benoit2568@hotmail.com';
 
 const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app);
 const $=id=>document.getElementById(id);

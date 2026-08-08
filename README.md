@@ -1,3 +1,6 @@
+## Version v2.2
+Compte propriétaire forcé en administrateur : benoit2568@hotmail.com
+
 # Punch Travail — GitHub Pages + Firebase
 
 Version complète prête à déposer dans le dépôt GitHub Pages.

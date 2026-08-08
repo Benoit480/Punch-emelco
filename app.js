@@ -14,6 +14,27 @@ const firebaseConfig = {
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
 
+
+
+function isOwnerEmail(email) {
+  return (email || '').trim().toLowerCase() === OWNER_EMAIL;
+}
+
+
+async function ensureOwnerAdminProfile(user, profileRef) {
+  if (!user || !isOwnerEmail(user.email) || !profileRef) return;
+  try {
+    await setDoc(profileRef, {
+      email: user.email,
+      role: 'admin',
+      isOwner: true,
+      active: true
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Impossible de synchroniser le rôle propriétaire:', err);
+  }
+}
+
 const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let currentUser=null,currentProfile=null,currentOpenSession=null,allSites=[],myRows=[],editingSession=null,editingAsAdmin=false;

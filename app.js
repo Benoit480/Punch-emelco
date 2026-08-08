@@ -13,13 +13,31 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 
 
 
 function isOwnerEmail(email) {
   return (email || '').trim().toLowerCase() === OWNER_EMAIL;
 }
+
+
+function toMillisSafe(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value.seconds) return value.seconds * 1000;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function sortPunchesNewestFirst(items) {
+  return [...items].sort((a, b) => {
+    const aTime = toMillisSafe(a.startTime || a.clockIn || a.createdAt || a.date);
+    const bTime = toMillisSafe(b.startTime || b.clockIn || b.createdAt || b.date);
+    return bTime - aTime;
+  });
+}
+
 
 
 async function ensureOwnerAdminProfile(user, profileRef) {
@@ -122,7 +140,7 @@ async function punchOut(){
 }
 
 async function loadHistory(){
-  const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid),orderBy('startAt','desc')));
+  const snap=await getDocs(query(collection(db,'punches'), where('userId','==',currentUser.uid)));
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
   $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6">Aucun punch.</td></tr>';
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
@@ -137,7 +155,7 @@ async function loadAdmin(){
   const present=openSnap.docs.map(d=>({id:d.id,...d.data()}));
   $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
 
-  const snap=await getDocs(query(collection(db,'punches'),orderBy('startAt','desc')));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
+  const snap=await getDocs(collection(db,'punches'));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
   $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="7">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   await loadEmployees(); await loadCorrections();

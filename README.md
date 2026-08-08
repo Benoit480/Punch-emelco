@@ -1,57 +1,23 @@
-# Punch Travail v2.3
+# Punch Travail v2.4
 
-Version GitHub Pages + Firebase pour Punch Travail.
+Correctifs principaux :
 
-## Important — correction v2.3
+- Suppression des requêtes Firestore composées inutiles qui déclenchaient
+  **The query requires an index**.
+- Tri des punchs effectué côté application lorsque possible.
+- Interface iPhone remise en **pleine largeur**.
+- Viewport mobile corrigé.
+- Cache busting ajouté à `app.js` et `style.css`.
+- Le punch actif existant dans Firestore est conservé.
+- Compte propriétaire : `benoit2568@hotmail.com`
+- Aucune gestion de pause.
 
-La v2.3 utilise maintenant **`punches`** comme collection unique pour les entrées, sorties et feuilles de temps.
-Cela correspond aux règles Firestore fournies dans `firestore.rules`.
-
-Compte propriétaire :
-- `benoit2568@hotmail.com`
-- reconnu automatiquement comme Administrateur
-
-## Installation GitHub
+## Installation
 
 1. Remplacer les fichiers du dépôt GitHub par ceux de ce ZIP.
 2. Faire **Commit changes**.
-3. Attendre la mise à jour de GitHub Pages.
-4. Actualiser Punch Travail et se reconnecter.
+3. Attendre 1 à 2 minutes que GitHub Pages se mette à jour.
+4. Sur iPhone, fermer complètement la page puis la rouvrir.
+5. Si l'ancienne mise en page reste affichée, actualiser une seconde fois.
 
-## Règles Firestore
-
-GitHub Pages ne peut pas modifier automatiquement les règles de sécurité Firebase.
-
-Dans Firebase :
-1. Cloud Firestore
-2. Règles
-3. Modifier les règles
-4. Remplacer tout le contenu par le fichier `firestore.rules`
-5. Publier
-
-## Fonctions incluses
-
-- Connexion employé / administrateur
-- Propriétaire forcé administrateur
-- Punch entrée
-- Punch sortie
-- GPS à l'entrée et à la sortie
-- Chantiers
-- Présence actuelle
-- Heures du jour
-- Heures de la semaine
-- Heures supplémentaires après 40 h
-- Historique personnel
-- Gestion des employés
-- Gestion des rôles
-- Activation / désactivation des employés
-- Modification des feuilles de temps par l'admin
-- Demandes de correction
-- Approbation / refus des corrections
-- Export CSV
-- Aucune gestion de pause
-
-## Firebase
-
-Projet configuré :
-`punch-emelco`
+Aucun changement de règle Firestore n'est normalement requis pour ce correctif.

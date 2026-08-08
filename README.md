@@ -1,58 +1,30 @@
 # Punch Travail — GitHub Pages + Firebase
 
-Application PWA de punch et présence au travail.
+Version complète prête à déposer dans le dépôt GitHub Pages.
 
-## Fonctions incluses
-- Connexion employé / administrateur
-- Création de compte employé
+## Inclus
+- Connexion / création de compte employé
 - Punch entrée / sortie seulement (aucune pause)
-- GPS enregistré à l'entrée et à la sortie
-- Sélection du chantier
+- GPS au punch
+- Choix du chantier
 - Présence en temps réel
+- Heures du jour, de la semaine et heures supplémentaires après 40 h
 - Historique personnel
-- Total quotidien et hebdomadaire
-- Heures supplémentaires après 40 h/semaine
+- Demande de correction par l'employé
 - Panneau administrateur
-- Liste des employés présents
-- Gestion de chantiers
-- Feuilles de temps
+- Gestion des chantiers : ajouter, renommer, activer/désactiver
+- Gestion des employés : rôle et activation
+- Présents maintenant
+- Modification directe d'une feuille de temps par l'admin
+- Approbation/refus des demandes de correction
 - Export CSV
-- Installation PWA iPhone / Android / ordinateur
 
-## 1. Firebase déjà configuré
-La configuration Web du projet **punch-emelco** est déjà intégrée dans `app.js`. Aucun `npm install` et aucun changement de clé ne sont requis.
+## Administrateur initial
+Le compte `Benoit2568@hotmail.com` est configuré comme propriétaire et sera promu administrateur à sa prochaine connexion avec les règles actuellement utilisées pendant la mise en place.
 
-Dans Firebase Console, il reste à vérifier :
-1. Authentication > Sign-in method > activer **Email/Password**.
-2. Firestore Database > créer la base si elle n’existe pas déjà.
+## Important — règles Firestore
+Le fichier `firestore.rules` contient les règles finales recommandées. GitHub Pages ne déploie PAS ce fichier automatiquement dans Firebase.
+Après avoir confirmé que le compte propriétaire affiche bien « Administrateur », copier le contenu de `firestore.rules` dans Firebase > Firestore > Règles > Modifier les règles > Publier.
 
-## 2. Installer les règles Firestore
-Dans Firebase > Firestore Database > Rules, remplacer les règles par le contenu de `firestore.rules`, puis publier.
-
-## 3. Créer le premier administrateur
-1. Créer ton compte dans l'app.
-2. Dans Firestore, ouvrir la collection `users`.
-3. Ouvrir ton document utilisateur.
-4. Modifier le champ `role` de `employee` à `admin`.
-5. Se déconnecter puis se reconnecter.
-
-## 4. Publier sur GitHub Pages
-1. Créer un dépôt GitHub, ex. `Punch-Presence`.
-2. Envoyer tous les fichiers du dossier dans le dépôt.
-3. GitHub > Settings > Pages.
-4. Source : **Deploy from a branch**.
-5. Branch : `main` et dossier `/ (root)`.
-6. Enregistrer.
-
-L'application sera ensuite disponible à l'adresse GitHub Pages du dépôt.
-
-## Structure
-- `index.html` : interface
-- `style.css` : design
-- `app.js` : Firebase, punch, GPS, historique et admin
-- `manifest.webmanifest` : installation PWA
-- `sw.js` : cache PWA
-- `firestore.rules` : sécurité Firestore
-
-## Important
-Le GPS du navigateur fonctionne seulement sur HTTPS. GitHub Pages fournit HTTPS, donc il convient à cette application.
+## Installation GitHub
+Remplacer les fichiers du dépôt par le contenu de ce dossier, puis Commit changes. GitHub Pages doit être configuré sur la branche principale et le dossier racine.

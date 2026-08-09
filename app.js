@@ -346,16 +346,24 @@ async function v3saveDailyNote(){
 }
 
 function v3hours(p){
-  const a=v3toMillis(p.startTime||p.clockIn||p.createdAt), b=v3toMillis(p.endTime||p.clockOut);
+  const a=v3toMillis(p.startAt||p.startTime||p.clockIn||p.createdAt);
+  const b=v3toMillis(p.endAt||p.endTime||p.clockOut);
   return a&&b&&b>=a?(b-a)/3600000:0;
 }
+
+function v3isClosedPunch(p){
+  return !!(p.endAt||p.endTime||p.clockOut) || p.status==='closed';
+}
+
+function v3startValue(p){ return p.startAt||p.startTime||p.clockIn||p.createdAt; }
+function v3endValue(p){ return p.endAt||p.endTime||p.clockOut; }
 
 async function v3approvals(){
   const box=v3el("approvalList"); if(!box) return;
   const q=await getDocs(collection(db,"punches"));
-  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>(p.endTime||p.clockOut)&&p.approved!==true);
+  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true);
   box.innerHTML=rows.length?rows.map(p=>`<div class="approval-item"><strong>${p.userName||p.userEmail||"Employé"}</strong><span>${p.siteName||p.site||"Chantier"} — ${v3hours(p).toFixed(2)} h</span><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
-  box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});v3approvals();});
+  box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});await v3approvals(); await v3reports();});
 }
 
 async function v3reports(){
@@ -368,10 +376,10 @@ async function v3reports(){
 
 async function v3exportPayroll(){
   const q=await getDocs(collection(db,"punches"));
-  const rows=q.docs.map(d=>d.data()).filter(p=>(p.endTime||p.clockOut)&&p.approved===true);
+  const rows=q.docs.map(d=>d.data()).filter(p=>v3isClosedPunch(p)&&p.approved===true);
   const out=[["Employé","Courriel","Chantier","Type de travail","Projet","Entrée","Sortie","Heures"]];
   rows.forEach(p=>{
-    const a=new Date(v3toMillis(p.startTime||p.clockIn)), b=new Date(v3toMillis(p.endTime||p.clockOut));
+    const a=new Date(v3toMillis(v3startValue(p))), b=new Date(v3toMillis(v3endValue(p)));
     out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.workType||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),v3hours(p).toFixed(2)]);
   });
   const csv=out.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");

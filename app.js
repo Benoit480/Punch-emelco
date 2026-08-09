@@ -93,7 +93,7 @@ async function loadSites(){
   const all=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   allSites=all.filter(s=>s.active!==false);
   $('siteSelect').innerHTML='<option value="">Choisir un chantier…</option>'+allSites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-  if(currentProfile?.role==='admin') renderSitesAdmin(all);
+  if(currentProfile?.role==='admin'){ renderSitesAdmin(all); v3populateAdvancedSites(all); }
 }
 
 function renderSitesAdmin(sites){
@@ -263,15 +263,33 @@ function v3siteSelect(){
   return v3el("siteSelect") || document.querySelector('select[name="site"]') || document.querySelector("select");
 }
 
+function v3advancedSiteSelect(){
+  return v3el("advancedSiteSelect");
+}
+
+function v3populateAdvancedSites(sites=allSites){
+  const sel=v3advancedSiteSelect();
+  if(!sel) return;
+  const previous=sel.value;
+  sel.innerHTML='<option value="">Choisir un chantier…</option>'+sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name||"Sans nom")}${s.active===false?' (désactivé)':''}</option>`).join('');
+  if(previous && sites.some(s=>s.id===previous)) sel.value=previous;
+}
+
 async function v3selectedSite(){
-  const id=v3siteSelect()?.value;
+  const id=(currentProfile?.role==='admin' && v3advancedSiteSelect()?.value) || v3siteSelect()?.value;
   if(!id) return null;
   const s=await getDoc(doc(db,"sites",id));
   return s.exists()?{id:s.id,...s.data()}:null;
 }
 
 async function v3loadSiteDetails(){
-  const s=await v3selectedSite(); if(!s) return;
+  const s=await v3selectedSite();
+  if(v3el("advancedSiteTitle")) v3el("advancedSiteTitle").textContent=s?`Gestion avancée — ${s.name||"Chantier"}`:"Gestion chantier avancée";
+  if(!s){
+    ["projectNumberInput","foremanInput","siteAddressInput","siteLatInput","siteLngInput"].forEach(id=>{if(v3el(id))v3el(id).value=""});
+    if(v3el("siteRadiusInput")) v3el("siteRadiusInput").value=250;
+    return;
+  }
   if(v3el("projectNumberInput")) v3el("projectNumberInput").value=s.projectNumber||"";
   if(v3el("foremanInput")) v3el("foremanInput").value=s.foreman||"";
   if(v3el("siteAddressInput")) v3el("siteAddressInput").value=s.address||"";
@@ -361,7 +379,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   v3el("saveDailyNoteBtn")?.addEventListener("click",v3saveDailyNote);
   v3el("refreshSiteReportsBtn")?.addEventListener("click",v3reports);
   v3el("exportPayrollBtn")?.addEventListener("click",v3exportPayroll);
-  v3siteSelect()?.addEventListener("change",v3loadSiteDetails);
+  v3siteSelect()?.addEventListener("change",()=>{ if(currentProfile?.role!=="admin" || !v3advancedSiteSelect()?.value) v3loadSiteDetails(); });
+  v3advancedSiteSelect()?.addEventListener("change",v3loadSiteDetails);
 
   const sync=()=>{
     const isAdmin=(document.body.innerText||"").includes("Administrateur");

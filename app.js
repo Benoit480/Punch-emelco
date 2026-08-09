@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 
 
 
@@ -118,7 +118,10 @@ function renderPresence(){
   $('presenceDot').className='dot '+(on?'on':'off'); $('presenceText').textContent=on?'Présent au travail':'Hors travail';
   $('punchInBtn').disabled=on || currentProfile?.active===false; $('punchOutBtn').disabled=!on || currentProfile?.active===false;
   $('siteSelect').disabled=on || currentProfile?.active===false;
+  $('workTypeField').classList.toggle('hidden', !on);
+  $('workTypeSelect').disabled=!on || currentProfile?.active===false;
   if(on&&currentOpenSession.siteId)$('siteSelect').value=currentOpenSession.siteId;
+  $('workTypeSelect').value=(on&&currentOpenSession.workType)?currentOpenSession.workType:'';
 }
 
 async function punchIn(){
@@ -133,8 +136,11 @@ async function punchIn(){
 }
 async function punchOut(){
   try{
-    if(!currentOpenSession)return;$('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
-    await updateDoc(doc(db,'punches',currentOpenSession.id),{endAt:serverTimestamp(),status:'closed',endGps:gps,updatedAt:serverTimestamp()});
+    if(!currentOpenSession)return;
+    const workType=$('workTypeSelect').value;
+    if(!workType)throw new Error('Choisis sur quoi tu as travaillé avant de faire ton punch sortie.');
+    $('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
+    await updateDoc(doc(db,'punches',currentOpenSession.id),{workType,endAt:serverTimestamp(),status:'closed',endGps:gps,updatedAt:serverTimestamp()});
     $('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
   }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
@@ -142,7 +148,7 @@ async function punchOut(){
 async function loadHistory(){
   const snap=await getDocs(query(collection(db,'punches'), where('userId','==',currentUser.uid)));
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6">Aucun punch.</td></tr>';
+  $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="7">Aucun punch.</td></tr>';
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
   const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=(now.getDay()+6)%7,startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
   let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=hoursBetween(r.startAt,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
@@ -153,10 +159,10 @@ async function loadAdmin(){
   if(currentProfile?.role!=='admin')return;
   const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
   const present=openSnap.docs.map(d=>({id:d.id,...d.data()}));
-  $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
+  $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
 
   const snap=await getDocs(collection(db,'punches'));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
-  $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="7">Aucune feuille de temps.</td></tr>';
+  $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   await loadEmployees(); await loadCorrections();
 }
@@ -205,8 +211,8 @@ async function reviewCorrection(id,approve){
 }
 
 function exportCsv(){
-  const rows=window.__adminRows||[],lines=[['Employé','Courriel','Date','Chantier','Entrée','Sortie','Total heures']];
-  for(const r of rows)lines.push([r.userName||'',r.userEmail||'',fmtDate(r.startAt),r.siteName||'',fmtTime(r.startAt),fmtTime(r.endAt),r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2):'']);
+  const rows=window.__adminRows||[],lines=[['Employé','Courriel','Date','Chantier','Type de travail','Entrée','Sortie','Total heures']];
+  for(const r of rows)lines.push([r.userName||'',r.userEmail||'',fmtDate(r.startAt),r.siteName||'',r.workType||'',fmtTime(r.startAt),fmtTime(r.endAt),r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2):'']);
   const csv=lines.map(a=>a.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n'),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='feuilles-de-temps.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -363,10 +369,10 @@ async function v3reports(){
 async function v3exportPayroll(){
   const q=await getDocs(collection(db,"punches"));
   const rows=q.docs.map(d=>d.data()).filter(p=>(p.endTime||p.clockOut)&&p.approved===true);
-  const out=[["Employé","Courriel","Chantier","Projet","Entrée","Sortie","Heures"]];
+  const out=[["Employé","Courriel","Chantier","Type de travail","Projet","Entrée","Sortie","Heures"]];
   rows.forEach(p=>{
     const a=new Date(v3toMillis(p.startTime||p.clockIn)), b=new Date(v3toMillis(p.endTime||p.clockOut));
-    out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),v3hours(p).toFixed(2)]);
+    out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.workType||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),v3hours(p).toFixed(2)]);
   });
   const csv=out.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");

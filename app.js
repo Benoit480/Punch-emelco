@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAYCAZEqryNI9wQ6kpnHmCsHK04R5Qk2Lg",
@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.6.0';
+const APP_VERSION = '3.6.2';
 
 
 

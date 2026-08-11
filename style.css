@@ -108,53 +108,77 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 .role-grid span{opacity:.75;font-size:.92rem}
 
 
-/* ===== Menu hamburger par rôle v3.3 ===== */
+
+
+/* ===== Menu hamburger + vrais onglets v3.4 ===== */
+.topbar{
+  gap:12px;
+}
 .menu-toggle{
-  position:fixed;
-  top:max(16px, env(safe-area-inset-top));
-  left:16px;
-  z-index:1200;
-  width:48px;
-  height:48px;
+  flex:0 0 46px;
+  width:46px;
+  height:46px;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   gap:5px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background:#122036;
-  box-shadow:0 8px 24px rgba(0,0,0,.28);
+  padding:0;
+  border-radius:12px;
+  border:1px solid #2b3b54;
+  background:#162338;
+  color:#fff;
+  cursor:pointer;
 }
 .menu-toggle span{
   width:22px;
   height:3px;
-  border-radius:3px;
+  border-radius:999px;
   background:#fff;
   display:block;
 }
+.topbar>div{
+  flex:1;
+  min-width:0;
+}
+
+.role-views-host{
+  width:100%;
+}
+.role-view{
+  width:100%;
+}
+.role-page-title{
+  margin:4px 2px 18px;
+}
+.role-page-title h2{
+  margin:4px 0 0;
+}
+
 .role-drawer{
   position:fixed;
   z-index:1300;
   top:0;
   left:0;
-  width:min(84vw, 340px);
+  width:min(86vw,360px);
   height:100dvh;
   padding:calc(18px + env(safe-area-inset-top)) 16px 18px;
   box-sizing:border-box;
   background:#0c1728;
   border-right:1px solid rgba(255,255,255,.10);
-  box-shadow:18px 0 40px rgba(0,0,0,.35);
+  box-shadow:18px 0 40px rgba(0,0,0,.38);
   transform:translateX(-105%);
   transition:transform .22s ease;
   overflow-y:auto;
 }
-.role-drawer.open{transform:translateX(0)}
+.role-drawer.open{
+  transform:translateX(0);
+}
 .drawer-backdrop{
   position:fixed;
   z-index:1250;
   inset:0;
-  background:rgba(0,0,0,.55);
+  background:rgba(0,0,0,.58);
   backdrop-filter:blur(2px);
 }
 .drawer-header{
@@ -166,23 +190,21 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
   border-bottom:1px solid rgba(255,255,255,.10);
 }
 .drawer-title{
-  font-size:1.2rem;
-  font-weight:800;
+  font-size:1.25rem;
+  font-weight:850;
 }
 .drawer-role{
   margin-top:4px;
-  opacity:.7;
-  font-size:.92rem;
+  color:#9fb0c8;
 }
 .drawer-close{
   width:42px;
   height:42px;
+  border:1px solid #2b3b54;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,.12);
-  background:#17263d;
+  background:#162338;
   color:#fff;
-  font-size:1.8rem;
-  line-height:1;
+  font-size:1.7rem;
 }
 .drawer-nav{
   display:grid;
@@ -191,19 +213,45 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 }
 .drawer-link{
   width:100%;
+  min-height:54px;
   text-align:left;
-  padding:15px 14px;
+  padding:14px 15px;
+  border:1px solid #2b3b54;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,.10);
   background:#122036;
   color:#fff;
-  font-weight:750;
-  font-size:1rem;
+  font-weight:800;
+  cursor:pointer;
 }
-.drawer-link:active{transform:scale(.99)}
-.menu-anchor{scroll-margin-top:90px;height:1px}
-#employeeSection,#foremanSection,#adminSection{scroll-margin-top:90px}
+.drawer-link.active{
+  background:#2f7df6;
+  border-color:#66a3ff;
+}
+.drawer-link.hidden{
+  display:none!important;
+}
 
-@media(min-width:900px){
-  .menu-toggle{left:24px}
+/* Les éléments déplacés dans les vues ne doivent pas rester cachés
+   à cause d'anciennes classes admin-panel. */
+#roleViewForeman > .admin-panel,
+#roleViewAdmin > .admin-panel,
+#roleViewAdmin > .admin-only{
+  display:block;
+}
+#roleViewForeman.hidden,
+#roleViewAdmin.hidden,
+#roleViewEmployee.hidden{
+  display:none!important;
+}
+
+@media(max-width:760px){
+  .topbar{
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .topbar h1{
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
 }

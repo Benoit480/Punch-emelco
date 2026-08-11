@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '3.4.0';
 
 
 
@@ -286,7 +286,7 @@ async function loadAdmin(){
   const snap=await getDocs(collection(db,'punches'));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
   $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
-  await loadEmployees(); await loadCorrections();
+  if(canManageUsers()) await loadEmployees(); await loadCorrections();
 }
 
 async function loadEmployees(){
@@ -297,7 +297,7 @@ async function loadEmployees(){
 }
 async function setUserRole(uid,role){
   if(!canManageUsers()) throw new Error('Seul un administrateur peut modifier les rôles.');try{await updateDoc(doc(db,'users',uid),{role,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de changer le rôle : '+e.message)}}
-async function setUserActive(uid,active){try{await updateDoc(doc(db,'users',uid),{active,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de modifier le compte : '+e.message)}}
+async function setUserActive(uid,active){if(!canManageUsers())return alert('Seul un administrateur peut activer ou désactiver un compte.');try{await updateDoc(doc(db,'users',uid),{active,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de modifier le compte : '+e.message)}}
 
 function openEditModal(sessionId,asAdmin){
   const rows=asAdmin?(window.__adminRows||[]):myRows; editingSession=rows.find(r=>r.id===sessionId); if(!editingSession)return;
@@ -349,12 +349,31 @@ $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;$('editM
 
 onAuthStateChanged(auth,async user=>{
   currentUser=user;
-  if(!user){currentProfile=null;currentOpenSession=null;show('authView',true);show('registerView',false);show('dashboard',false);show('logoutBtn',false);return}
+  if(!user){
+    currentProfile=null;
+    currentOpenSession=null;
+    show('authView',true);
+    show('registerView',false);
+    show('dashboard',false);
+    show('logoutBtn',false);
+    show('menuToggleBtn',false);
+    closeRoleDrawer();
+    return;
+  }
   currentProfile=await loadProfile(user.uid);
   if(!currentProfile){await setDoc(doc(db,'users',user.uid),{name:user.email,email:user.email,role:'employee',active:true,createdAt:serverTimestamp()});currentProfile=await loadProfile(user.uid)}
   await ensureOwnerAdmin();
   $('userLine').textContent=`${currentProfile.name||user.email} • ${roleLabel(currentRole())}${currentProfile.active===false?' • Compte désactivé':''}`;
-  show('authView',false);show('registerView',false);show('dashboard',true);show('logoutBtn',true);show('adminPanel',canManageTime());await refreshAll();
+  show('authView',false);
+  show('registerView',false);
+  show('dashboard',true);
+  show('logoutBtn',true);
+  show('menuToggleBtn',true);
+  show('adminPanel',false);
+  prepareRoleViews();
+  refreshRoleMenu();
+  switchRoleTab('employee');
+  await refreshAll();
 });
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
@@ -544,25 +563,16 @@ document.addEventListener("click",async ev=>{
 
 
 function applyRoleUI(){
-  setTimeout(()=>{try{refreshRoleDrawer();}catch(e){}},0);
   const r = currentRole();
   const isAdmin = r === ROLE_ADMIN;
   const isForeman = r === ROLE_FOREMAN;
 
-  // Admin only
-  document.querySelectorAll('[data-role-admin-only], .admin-only').forEach(el=>{
-    el.classList.toggle('hidden', !isAdmin);
-  });
-
-  // Foreman + Admin
-  document.querySelectorAll('[data-role-time-manager], .time-manager-only').forEach(el=>{
-    el.classList.toggle('hidden', !(isAdmin || isForeman));
-  });
-
-  // Update visible role labels
   document.querySelectorAll('[data-role-label]').forEach(el=>{
     el.textContent = roleLabel(r);
   });
+
+  // Les vrais onglets gèrent maintenant la visibilité des sections.
+  try{ refreshRoleMenu(); }catch(e){}
 }
 
 
@@ -595,66 +605,172 @@ async function updatePunchTimeV32(punchId, patch){
 
 
 
-// ===== Menu hamburger par rôle v3.3 =====
-function drawerRoleRank(role){
-  if(role === 'admin') return 3;
-  if(role === 'foreman') return 2;
+// ===== Menu hamburger + vrais onglets par rôle v3.4 =====
+let activeRoleTab = 'employee';
+let roleViewsPrepared = false;
+
+function roleRank(role){
+  if(role === ROLE_ADMIN || role === 'admin') return 3;
+  if(role === ROLE_FOREMAN || role === 'foreman') return 2;
   return 1;
 }
-function drawerCurrentRole(){
-  try{
-    if(typeof currentRole === 'function') return currentRole();
-    if(typeof isOwnerEmail === 'function' && isOwnerEmail(auth.currentUser?.email)) return 'admin';
-    const r = currentProfile?.role || 'employee';
-    return ['employee','foreman','admin'].includes(r) ? r : 'employee';
-  }catch(e){ return 'employee'; }
+
+function allowedRoleTab(tab){
+  return roleRank(currentRole()) >= roleRank(tab);
 }
-function drawerRoleText(role){
-  if(role === 'admin') return 'Administrateur';
-  if(role === 'foreman') return 'Contremaître';
-  return 'Employé';
+
+function prepareRoleViews(){
+  if(roleViewsPrepared) return;
+
+  const employeeView = document.getElementById('roleViewEmployee');
+  const foremanView = document.getElementById('roleViewForeman');
+  const adminView = document.getElementById('roleViewAdmin');
+  if(!employeeView || !foremanView || !adminView) return;
+
+  // ESPACE EMPLOYÉ:
+  // Carte punch + statistiques (leur grille commune)
+  const employeeSection = document.getElementById('employeeSection');
+  const topGrid = employeeSection?.closest('.grid.two');
+  if(topGrid) employeeView.appendChild(topGrid);
+
+  // Historique personnel
+  const historyBody = document.getElementById('historyBody');
+  const historyCard = historyBody?.closest('.card');
+  if(historyCard) employeeView.appendChild(historyCard);
+
+  // Journal / note quotidienne
+  const dailyNote = document.getElementById('dailyNoteSection');
+  if(dailyNote) employeeView.appendChild(dailyNote);
+
+  // ESPACE CONTREMAÎTRE:
+  // Présents maintenant
+  const presentCard = document.getElementById('presentList')?.closest('.card');
+  if(presentCard) foremanView.appendChild(presentCard);
+
+  // Demandes de correction
+  const correctionCard = document.getElementById('correctionList')?.closest('.card');
+  if(correctionCard) foremanView.appendChild(correctionCard);
+
+  // Feuilles de temps / modifications
+  const timesCard = document.getElementById('adminTimesBody')?.closest('.card');
+  if(timesCard) foremanView.appendChild(timesCard);
+
+  // Approbation des heures
+  const approvals = document.getElementById('foremanSection') || document.getElementById('approvalAdmin');
+  if(approvals) {
+    approvals.classList.remove('hidden');
+    foremanView.appendChild(approvals);
+  }
+
+  // ESPACE ADMIN:
+  // Gestion des chantiers
+  const siteCard = document.getElementById('siteList')?.closest('.card');
+  if(siteCard) adminView.appendChild(siteCard);
+
+  // Gestion des employés et rôles
+  const employeesCard = document.getElementById('employeeList')?.closest('.card');
+  if(employeesCard) adminView.appendChild(employeesCard);
+
+  // Gestion chantier avancée
+  const construction = document.getElementById('constructionAdmin');
+  if(construction) {
+    construction.classList.remove('hidden');
+    adminView.appendChild(construction);
+  }
+
+  // Rapports
+  const reports = document.getElementById('siteReportsAdmin');
+  if(reports) {
+    reports.classList.remove('hidden');
+    adminView.appendChild(reports);
+  }
+
+  // Explication des permissions
+  const rolesInfo = document.getElementById('rolesInfo');
+  if(rolesInfo) {
+    rolesInfo.classList.remove('hidden');
+    adminView.appendChild(rolesInfo);
+  }
+
+  // Ancien conteneur admin: on le garde invisible, puisque ses cartes
+  // ont été déplacées dans les vrais onglets.
+  const oldAdminPanel = document.getElementById('adminPanel');
+  if(oldAdminPanel) oldAdminPanel.classList.add('hidden');
+
+  roleViewsPrepared = true;
 }
-function refreshRoleDrawer(){
-  const role = drawerCurrentRole();
-  const rank = drawerRoleRank(role);
+
+function refreshRoleMenu(){
+  const role = currentRole();
+  const rank = roleRank(role);
+
   const label = document.getElementById('drawerRoleLabel');
-  if(label) label.textContent = drawerRoleText(role);
+  if(label) label.textContent = roleLabel(role);
 
   document.querySelectorAll('.drawer-link[data-min-role]').forEach(btn=>{
-    const need = drawerRoleRank(btn.dataset.minRole || 'employee');
-    btn.classList.toggle('hidden', rank < need);
+    const visible = rank >= roleRank(btn.dataset.minRole || 'employee');
+    btn.classList.toggle('hidden', !visible);
   });
+
+  if(!allowedRoleTab(activeRoleTab)){
+    switchRoleTab('employee');
+  }
 }
+
+function switchRoleTab(tab){
+  if(!allowedRoleTab(tab)) tab = 'employee';
+  activeRoleTab = tab;
+
+  const map = {
+    employee: 'roleViewEmployee',
+    foreman: 'roleViewForeman',
+    admin: 'roleViewAdmin'
+  };
+
+  Object.entries(map).forEach(([name,id])=>{
+    document.getElementById(id)?.classList.toggle('hidden', name !== tab);
+  });
+
+  document.querySelectorAll('.drawer-link[data-role-tab]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.roleTab === tab);
+  });
+
+  closeRoleDrawer();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
 function openRoleDrawer(){
-  refreshRoleDrawer();
+  refreshRoleMenu();
   document.getElementById('roleDrawer')?.classList.add('open');
   document.getElementById('drawerBackdrop')?.classList.remove('hidden');
   document.getElementById('roleDrawer')?.setAttribute('aria-hidden','false');
   document.getElementById('menuToggleBtn')?.setAttribute('aria-expanded','true');
 }
+
 function closeRoleDrawer(){
   document.getElementById('roleDrawer')?.classList.remove('open');
   document.getElementById('drawerBackdrop')?.classList.add('hidden');
   document.getElementById('roleDrawer')?.setAttribute('aria-hidden','true');
   document.getElementById('menuToggleBtn')?.setAttribute('aria-expanded','false');
 }
-function goToRoleSection(id){
-  const el = document.getElementById(id);
-  if(el){
-    closeRoleDrawer();
-    setTimeout(()=>el.scrollIntoView({behavior:'smooth', block:'start'}), 60);
-  }
-}
-document.addEventListener('DOMContentLoaded',()=>{
+
+function setupRoleMenu(){
+  prepareRoleViews();
+
   document.getElementById('menuToggleBtn')?.addEventListener('click',()=>{
-    const open = document.getElementById('roleDrawer')?.classList.contains('open');
-    open ? closeRoleDrawer() : openRoleDrawer();
+    const isOpen = document.getElementById('roleDrawer')?.classList.contains('open');
+    isOpen ? closeRoleDrawer() : openRoleDrawer();
   });
-  document.getElementById('drawerCloseBtn')?.addEventListener('click', closeRoleDrawer);
-  document.getElementById('drawerBackdrop')?.addEventListener('click', closeRoleDrawer);
-  document.querySelectorAll('.drawer-link[data-target-section]').forEach(btn=>{
-    btn.addEventListener('click',()=>goToRoleSection(btn.dataset.targetSection));
+
+  document.getElementById('drawerCloseBtn')?.addEventListener('click',closeRoleDrawer);
+  document.getElementById('drawerBackdrop')?.addEventListener('click',closeRoleDrawer);
+
+  document.querySelectorAll('.drawer-link[data-role-tab]').forEach(btn=>{
+    btn.addEventListener('click',()=>switchRoleTab(btn.dataset.roleTab));
   });
-  refreshRoleDrawer();
-  setTimeout(refreshRoleDrawer, 1000);
-});
+
+  refreshRoleMenu();
+  switchRoleTab('employee');
+}
+
+document.addEventListener('DOMContentLoaded', setupRoleMenu);

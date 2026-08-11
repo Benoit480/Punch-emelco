@@ -1,48 +1,32 @@
-# Punch Emelco v3.3 — Menu par rôle
+# Punch Emelco v3.4 — Menu par rôle corrigé
 
-Ajout du menu hamburger ☰ en haut à gauche.
+Cette version corrige la dernière patch du menu.
 
-- Employé : Mon espace
-- Contremaître : Mon espace + onglet Contremaître
-- Admin : Mon espace + Contremaître + Administration
+## Fonctionnement
 
-Les entrées du menu sont automatiquement masquées selon le rôle.
-Le reste de l'application et le repas 30 min sont conservés.
+- Employé :
+  - Mon espace seulement
 
-# Punch Emelco v3.2 — 3 rôles
+- Contremaître :
+  - Mon espace
+  - Onglet Contremaître
+  - Présents maintenant
+  - Demandes de correction
+  - Feuilles de temps
+  - Approbation / modification des heures
 
-Rôles ajoutés :
+- Administrateur :
+  - Mon espace
+  - Onglet Contremaître
+  - Onglet Administration
+  - Gestion des chantiers
+  - Gestion des employés et rôles
+  - Gestion chantier avancée
+  - Rapports et exports
+  - Contrôle total
 
-- Employé
-- Contremaître
-- Administrateur
+Le bouton ☰ est maintenant intégré dans l'en-tête.
+Ce sont de vrais onglets : le contenu change au lieu de simplement faire défiler la page.
 
-## Permissions
-
-Employé :
-- Punch entrée/sortie
-- Repas 30 min
-- Voir ses propres heures et historique
-
-Contremaître :
-- Tout ce qu'un employé peut faire
-- Voir/modifier les heures des employés
-- Approuver les heures et corrections
-- Ne peut pas modifier les rôles
-- Ne peut pas donner le rôle administrateur
-
-Administrateur :
-- Contrôle total
-- Gestion des utilisateurs
-- Gestion des rôles
-- Gestion des chantiers
-- Gestion des heures
-- Approbations
-- Rapports, exports et paramètres
-
-Compte propriétaire conservé : `benoit2568@hotmail.com`
-
-## Important
-
-Le fichier `firestore.rules` inclus a été mis à jour pour les trois rôles.
-Publie ces règles dans Firebase > Cloud Firestore > Règles.
+Le cache du service worker et les versions CSS/JS ont aussi été changés
+pour éviter que l'iPhone conserve l'ancienne patch.

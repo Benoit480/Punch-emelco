@@ -255,3 +255,14 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
     text-overflow:ellipsis;
   }
 }
+
+
+/* ===== Correctif clic menu v3.4.1 ===== */
+.role-view[style*="display: block"]{
+  display:block !important;
+}
+#roleViewEmployee:not(.hidden),
+#roleViewForeman:not(.hidden),
+#roleViewAdmin:not(.hidden){
+  display:block !important;
+}

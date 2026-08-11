@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.4.0';
+const APP_VERSION = '3.4.1';
 
 
 
@@ -371,6 +371,7 @@ onAuthStateChanged(auth,async user=>{
   show('menuToggleBtn',true);
   show('adminPanel',false);
   prepareRoleViews();
+  setupRoleMenu();
   refreshRoleMenu();
   switchRoleTab('employee');
   await refreshAll();
@@ -620,7 +621,7 @@ function allowedRoleTab(tab){
 }
 
 function prepareRoleViews(){
-  if(roleViewsPrepared) return;
+  if(roleViewsPrepared && document.getElementById('roleViewEmployee')?.children.length) return;
 
   const employeeView = document.getElementById('roleViewEmployee');
   const foremanView = document.getElementById('roleViewForeman');
@@ -717,26 +718,52 @@ function refreshRoleMenu(){
   }
 }
 
-function switchRoleTab(tab){
+async function switchRoleTab(tab){
+  prepareRoleViews();
+
   if(!allowedRoleTab(tab)) tab = 'employee';
   activeRoleTab = tab;
 
-  const map = {
-    employee: 'roleViewEmployee',
-    foreman: 'roleViewForeman',
-    admin: 'roleViewAdmin'
-  };
+  const employee = document.getElementById('roleViewEmployee');
+  const foreman = document.getElementById('roleViewForeman');
+  const admin = document.getElementById('roleViewAdmin');
 
-  Object.entries(map).forEach(([name,id])=>{
-    document.getElementById(id)?.classList.toggle('hidden', name !== tab);
+  // Force l'affichage au lieu de dépendre seulement des anciennes classes.
+  [employee, foreman, admin].forEach(el=>{
+    if(el){
+      el.classList.add('hidden');
+      el.style.display = 'none';
+    }
   });
+
+  const target = tab === 'admin' ? admin : (tab === 'foreman' ? foreman : employee);
+  if(target){
+    target.classList.remove('hidden');
+    target.style.display = 'block';
+  }
+
+  // Recharge les données nécessaires au moment où on ouvre un onglet.
+  try{
+    if(tab === 'foreman' && canManageTime()){
+      await loadAdmin();
+      if(typeof v3approvals === 'function') await v3approvals();
+    }
+    if(tab === 'admin' && currentRole() === ROLE_ADMIN){
+      await loadAdmin();
+      await loadEmployees();
+      if(typeof v3approvals === 'function') await v3approvals();
+      if(typeof v3reports === 'function') await v3reports();
+    }
+  }catch(err){
+    console.warn('Chargement onglet:', err);
+  }
 
   document.querySelectorAll('.drawer-link[data-role-tab]').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.roleTab === tab);
   });
 
   closeRoleDrawer();
-  window.scrollTo({top:0, behavior:'smooth'});
+  setTimeout(()=>window.scrollTo({top:0, behavior:'smooth'}),50);
 }
 
 function openRoleDrawer(){
@@ -757,20 +784,38 @@ function closeRoleDrawer(){
 function setupRoleMenu(){
   prepareRoleViews();
 
-  document.getElementById('menuToggleBtn')?.addEventListener('click',()=>{
-    const isOpen = document.getElementById('roleDrawer')?.classList.contains('open');
-    isOpen ? closeRoleDrawer() : openRoleDrawer();
-  });
+  const toggle = document.getElementById('menuToggleBtn');
+  if(toggle){
+    toggle.onclick = ()=>{
+      const isOpen = document.getElementById('roleDrawer')?.classList.contains('open');
+      isOpen ? closeRoleDrawer() : openRoleDrawer();
+    };
+  }
 
-  document.getElementById('drawerCloseBtn')?.addEventListener('click',closeRoleDrawer);
-  document.getElementById('drawerBackdrop')?.addEventListener('click',closeRoleDrawer);
+  const close = document.getElementById('drawerCloseBtn');
+  if(close) close.onclick = closeRoleDrawer;
+
+  const backdrop = document.getElementById('drawerBackdrop');
+  if(backdrop) backdrop.onclick = closeRoleDrawer;
 
   document.querySelectorAll('.drawer-link[data-role-tab]').forEach(btn=>{
-    btn.addEventListener('click',()=>switchRoleTab(btn.dataset.roleTab));
+    btn.onclick = async (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      await switchRoleTab(btn.dataset.roleTab);
+    };
   });
 
   refreshRoleMenu();
-  switchRoleTab('employee');
 }
+
+// Fallback iPhone/Safari : capture tous les clics sur les boutons du menu.
+document.addEventListener('click', async (e)=>{
+  const btn = e.target.closest?.('.drawer-link[data-role-tab]');
+  if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  await switchRoleTab(btn.dataset.roleTab);
+}, true);
 
 document.addEventListener('DOMContentLoaded', setupRoleMenu);

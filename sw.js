@@ -1,4 +1,4 @@
-const CACHE='punch-travail-v3-4-menu-tabs-20260810';
+const CACHE='punch-travail-v3-4-1-menu-click-fix';
 const ASSETS=['./','./index.html','./style.css','./app.js','./manifest.webmanifest'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
 self.addEventListener('activate',e=>{e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))]))});

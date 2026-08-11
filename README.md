@@ -1,12 +1,16 @@
-# Punch Emelco v3.6.3 — Correctif connexion
+# Punch Emelco v3.6.4 — Correctif permissions propriétaire
 
-Correctifs :
+Le compte `benoit2568@hotmail.com` est maintenant reconnu directement
+comme propriétaire dans les règles Firestore.
 
-- tous les modules Firebase utilisent maintenant la même version `12.1.0`;
-- `deleteDoc` reste disponible pour supprimer un chantier;
-- l'écran ne reste plus bloqué sur Connexion si un panneau secondaire échoue;
-- la Note quotidienne est cachée tant que l'utilisateur n'est pas connecté;
-- le bouton Connexion affiche maintenant l'erreur Firebase exacte si la connexion échoue;
-- cache GitHub Pages / service worker changé pour forcer le chargement de cette version.
+Cela permet notamment :
+- supprimer un chantier;
+- créer/modifier/supprimer des chantiers;
+- gérer les utilisateurs;
+- conserver les permissions Admin même si l'ancien document utilisateur
+  contient encore le rôle `employee`.
 
-Aucune fonction de punch, repas, rôle, contremaître ou suppression n'a été retirée.
+IMPORTANT :
+Le fichier `firestore.rules` doit être copié dans
+Firebase > Cloud Firestore > Règles puis publié.
+Mettre seulement le ZIP sur GitHub ne change pas les règles Firebase.

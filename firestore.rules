@@ -7,16 +7,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function myUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    // Propriétaire principal : reconnu directement par Firebase Auth.
+    function isOwner() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'benoit2568@hotmail.com';
+    }
+
+    function myUserExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function myRole() {
-      return signedIn() && myUser().exists() ? myUser().data.role : 'employee';
+      return myUserExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'employee';
     }
 
     function isAdmin() {
-      return signedIn() && myRole() == 'admin';
+      return isOwner() || (signedIn() && myRole() == 'admin');
     }
 
     function isForeman() {
@@ -27,61 +37,98 @@ service cloud.firestore {
       return isAdmin() || isForeman();
     }
 
+    // =========================
+    // UTILISATEURS
+    // =========================
     match /users/{userId} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && (
-        isAdmin() ||
-        (
-          request.auth.uid == userId &&
-          request.resource.data.role == resource.data.role
-        )
+
+      allow create: if signedIn()
+                    && request.auth.uid == userId;
+
+      // Admin/propriétaire : contrôle total.
+      // Utilisateur normal : peut modifier son profil, mais pas son rôle.
+      allow update: if isAdmin() || (
+        signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role
       );
+
       allow delete: if isAdmin();
     }
 
+    // =========================
+    // CHANTIERS / PROJETS
+    // =========================
     match /sites/{siteId} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
     }
 
+    // =========================
+    // PUNCHS / HEURES
+    // =========================
     match /punches/{punchId} {
       allow read: if signedIn();
 
       allow create: if signedIn()
                     && request.resource.data.userId == request.auth.uid;
 
-      allow update: if signedIn() && (
-        canManageTime() ||
-        resource.data.userId == request.auth.uid
+      allow update: if canManageTime() || (
+        signedIn()
+        && resource.data.userId == request.auth.uid
       );
 
       allow delete: if isAdmin();
     }
 
+    // =========================
+    // DEMANDES DE CORRECTION
+    // =========================
     match /correctionRequests/{requestId} {
       allow read: if signedIn();
+
       allow create: if signedIn()
                     && request.resource.data.userId == request.auth.uid;
+
       allow update: if canManageTime();
       allow delete: if isAdmin();
     }
 
+    // =========================
+    // NOTES QUOTIDIENNES
+    // =========================
     match /dailyNotes/{noteId} {
       allow read: if signedIn();
+
       allow create: if signedIn()
                     && request.resource.data.userId == request.auth.uid;
-      allow update: if canManageTime() || resource.data.userId == request.auth.uid;
+
+      allow update: if canManageTime() || (
+        signedIn()
+        && resource.data.userId == request.auth.uid
+      );
+
       allow delete: if isAdmin();
     }
 
+    // =========================
+    // PRÉSENCE
+    // =========================
     match /presence/{userId} {
       allow read: if signedIn();
-      allow create, update: if signedIn()
-                            && (request.auth.uid == userId || canManageTime());
+
+      allow create, update: if signedIn() && (
+        request.auth.uid == userId
+        || canManageTime()
+      );
+
       allow delete: if canManageTime();
     }
 
+    // =========================
+    // PARAMÈTRES
+    // =========================
     match /settings/{document=**} {
       allow read: if signedIn();
       allow write: if isAdmin();

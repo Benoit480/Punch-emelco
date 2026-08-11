@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.6.4';
+const APP_VERSION = '3.8.0';
 
 
 
@@ -861,6 +861,7 @@ async function saveForemanAssignment(){
 
   await loadAdmin();
   if(typeof v3approvals === 'function') await v3approvals();
+      if(typeof loadForemanPayrollPreview === 'function') await loadForemanPayrollPreview();
 }
 
 function setupForemanAssignmentUI(){
@@ -1235,3 +1236,76 @@ document.addEventListener('click', async e=>{
     );
   }
 }, true);
+
+
+
+// ===== Export paie contremaître v3.8 =====
+let payrollWeekOffset=0;
+function payrollStartOfWeek(base=new Date(),off=0){const d=new Date(base);d.setHours(0,0,0,0);d.setDate(d.getDate()-d.getDay()+off*7);return d}
+function payrollEndOfWeek(s){const d=new Date(s);d.setDate(d.getDate()+6);d.setHours(23,59,59,999);return d}
+function payrollWeekRange(){const start=payrollStartOfWeek(new Date(),payrollWeekOffset);return{start,end:payrollEndOfWeek(start)}}
+function payrollManagedIds(){const ids=new Set((foremanAssignment&&foremanAssignment.employeeIds)||[]);if(currentUser?.uid)ids.add(currentUser.uid);return ids}
+function payrollTaskLabel(p){return p.workType||p.task||p.taskName||p.subSite||p.subSiteName||'—'}
+function payrollRecordDate(p){return toDate(p.startAt||p.startTime||p.clockIn||p.createdAt)}
+function payrollInWeek(p){const d=payrollRecordDate(p);const r=payrollWeekRange();return d&&d>=r.start&&d<=r.end}
+function payrollHours(p){
+  const end=p.endAt||p.endTime||p.clockOut;
+  if(!end)return 0;
+  if(typeof paidHoursBetweenSession==='function')return paidHoursBetweenSession(p,end);
+  const a=payrollRecordDate(p),b=toDate(end);if(!a||!b)return 0;
+  let h=Math.max(0,(b-a)/36e5);
+  if(p.mealStartAt)h=Math.max(0,h-0.5);
+  return h;
+}
+function payrollStatus(p){return p.approved===true?'Approuvé':'À approuver'}
+
+async function loadForemanPayrollPreview(){
+  const box=$('payrollPreviewList'); if(!box||!currentUser)return;
+  const {start,end}=payrollWeekRange();
+  if($('payrollWeekLabel'))$('payrollWeekLabel').textContent=`${start.toLocaleDateString('fr-CA',{day:'numeric',month:'short'})} au ${end.toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'})}`;
+  const ids=payrollManagedIds();
+  const [ps,us]=await Promise.all([getDocs(collection(db,'punches')),getDocs(collection(db,'users'))]);
+  const users=new Map(us.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+  const punches=ps.docs.map(d=>({id:d.id,...d.data()})).filter(p=>ids.has(p.userId)&&payrollInWeek(p));
+  box.innerHTML=[...ids].map(uid=>{
+    const u=users.get(uid)||{}, rows=punches.filter(p=>p.userId===uid);
+    const total=rows.reduce((s,p)=>s+payrollHours(p),0);
+    const byDay={};
+    rows.forEach(p=>{const d=payrollRecordDate(p);const k=d?d.toISOString().slice(0,10):'x';(byDay[k]??=[]).push(p)});
+    const days=Object.entries(byDay).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,rr])=>{
+      const d=new Date(k+'T12:00:00'),dt=rr.reduce((s,p)=>s+payrollHours(p),0);
+      return `<div class="payroll-day"><div class="payroll-day-head"><strong>${d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'short'})}</strong><span>${dt.toFixed(2)} h</span></div>${rr.map(p=>`<div class="payroll-line"><strong>${escapeHtml(p.siteName||p.site||'Chantier')}</strong><div class="muted">Tâche : ${escapeHtml(payrollTaskLabel(p))}</div><div class="muted">${fmtDateTime(p.startAt||p.startTime||p.clockIn)} → ${fmtDateTime(p.endAt||p.endTime||p.clockOut)}</div><div class="muted">Repas : ${p.mealStartAt?30:0} min · ${payrollStatus(p)}</div></div>`).join('')}</div>`
+    }).join('');
+    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(u.name||u.email||'Employé')}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
+  }).join('');
+}
+
+async function approveForemanOwnWeek(){
+  const ps=await getDocs(collection(db,'punches'));
+  const own=ps.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.userId===currentUser.uid&&payrollInWeek(p)&&(p.endAt||p.endTime||p.clockOut));
+  for(const p of own) if(p.approved!==true) await updateDoc(doc(db,'punches',p.id),{approved:true,approvedBy:currentUser.uid,approvedAt:serverTimestamp(),updatedAt:serverTimestamp()});
+  if($('payrollExportStatus'))$('payrollExportStatus').textContent='Tes heures sont approuvées.';
+  await loadForemanPayrollPreview();
+}
+
+async function exportForemanPayrollCsv(){
+  const ids=payrollManagedIds(),{start,end}=payrollWeekRange();
+  const [ps,us]=await Promise.all([getDocs(collection(db,'punches')),getDocs(collection(db,'users'))]);
+  const users=new Map(us.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+  const rows=ps.docs.map(d=>({id:d.id,...d.data()})).filter(p=>ids.has(p.userId)&&payrollInWeek(p)&&(p.endAt||p.endTime||p.clockOut));
+  const data=[['Employé','Date','Chantier','Tâche effectuée','Entrée','Sortie','Repas (min)','Heures payables','Statut']];
+  rows.sort((a,b)=>(users.get(a.userId)?.name||'').localeCompare(users.get(b.userId)?.name||'')||payrollRecordDate(a)-payrollRecordDate(b)).forEach(p=>{
+    const u=users.get(p.userId)||{},a=payrollRecordDate(p),b=toDate(p.endAt||p.endTime||p.clockOut);
+    data.push([u.name||u.email||'',a?.toLocaleDateString('fr-CA')||'',p.siteName||p.site||'',payrollTaskLabel(p),a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',p.mealStartAt?30:0,payrollHours(p).toFixed(2),payrollStatus(p)]);
+  });
+  const csv=data.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=`paie_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  $('payrollPrevWeekBtn')?.addEventListener('click',async()=>{payrollWeekOffset--;await loadForemanPayrollPreview()});
+  $('payrollNextWeekBtn')?.addEventListener('click',async()=>{payrollWeekOffset++;await loadForemanPayrollPreview()});
+  $('approveOwnWeekBtn')?.addEventListener('click',async()=>{try{await approveForemanOwnWeek()}catch(e){alert(e.message)}});
+  $('exportForemanPayrollCsvBtn')?.addEventListener('click',async()=>{try{await exportForemanPayrollCsv()}catch(e){alert(e.message)}});
+});

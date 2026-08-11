@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.6.3" />
+  <link rel="stylesheet" href="style.css?v=3.8.0" />
 </head>
 <body>
 <div id="app">
@@ -77,7 +77,25 @@
   <div id="foremanAssignmentStatus" class="muted small"></div>
 </div>
 
-          </section>
+          
+<div id="foremanPayrollExport" class="card payroll-export-card">
+  <div class="eyebrow">EXPORT PAIE</div>
+  <h3>Semaine de paie</h3>
+  <p class="muted small">Inclut automatiquement le contremaître et les employés qu’il supervise.</p>
+  <div class="payroll-week-nav">
+    <button id="payrollPrevWeekBtn" class="secondary compact">‹</button>
+    <div><strong id="payrollWeekLabel">Semaine</strong><div class="muted small">Dimanche au samedi</div></div>
+    <button id="payrollNextWeekBtn" class="secondary compact">›</button>
+  </div>
+  <div id="payrollPreviewList" class="payroll-preview-list"></div>
+  <div class="row-actions">
+    <button id="approveOwnWeekBtn" class="success">Approuver ma semaine</button>
+    <button id="exportForemanPayrollCsvBtn" class="primary">Exporter CSV paie</button>
+  </div>
+  <div id="payrollExportStatus" class="muted small"></div>
+</div>
+
+</section>
 
           <section id="roleViewAdmin" class="role-view hidden">
             <div class="role-page-title">
@@ -228,7 +246,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.6.4"></script>
+  <script type="module" src="app.js?v=3.8.0"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

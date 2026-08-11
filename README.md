@@ -1,16 +1,11 @@
-# Punch Emelco v3.6.4 — Correctif permissions propriétaire
+# Punch Emelco v3.8 — Export paie Contremaître
 
-Le compte `benoit2568@hotmail.com` est maintenant reconnu directement
-comme propriétaire dans les règles Firestore.
-
-Cela permet notamment :
-- supprimer un chantier;
-- créer/modifier/supprimer des chantiers;
-- gérer les utilisateurs;
-- conserver les permissions Admin même si l'ancien document utilisateur
-  contient encore le rôle `employee`.
-
-IMPORTANT :
-Le fichier `firestore.rules` doit être copié dans
-Firebase > Cloud Firestore > Règles puis publié.
-Mettre seulement le ZIP sur GitHub ne change pas les règles Firebase.
+Dans l'onglet Contremaître :
+- semaine de paie dimanche à samedi;
+- aperçu par employé puis par jour;
+- le contremaître est automatiquement inclus avec les employés qu'il supervise;
+- chantier, tâche effectuée, entrée, sortie, repas et heures payables;
+- statut d'approbation;
+- le contremaître peut approuver ses propres heures;
+- export CSV de son équipe + lui-même;
+- aucune heure supplémentaire.

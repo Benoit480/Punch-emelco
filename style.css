@@ -266,3 +266,49 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 #roleViewAdmin:not(.hidden){
   display:block !important;
 }
+
+
+/* ===== Affectation Contremaître v3.5 ===== */
+.foreman-assignment-card{
+  margin-bottom:18px;
+}
+.foreman-employees-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  margin:16px 0 8px;
+}
+.foreman-employee-picker{
+  display:grid;
+  gap:8px;
+  max-height:320px;
+  overflow:auto;
+  padding:8px;
+  margin-bottom:12px;
+  border:1px solid #263851;
+  border-radius:12px;
+  background:#0b1728;
+}
+.foreman-employee-choice{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px;
+  margin:0;
+  border:1px solid #263851;
+  border-radius:10px;
+  background:#111f32;
+}
+.foreman-employee-choice input{
+  width:20px;
+  height:20px;
+  flex:0 0 auto;
+}
+.foreman-employee-choice span{
+  display:grid;
+  gap:2px;
+}
+.foreman-employee-choice small{
+  color:#9fb0c8;
+}

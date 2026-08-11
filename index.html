@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.4.1" />
+  <link rel="stylesheet" href="style.css?v=3.5.0" />
 </head>
 <body>
 <div id="app">
@@ -52,6 +52,31 @@
               <div class="eyebrow">CONTREMAÎTRE</div>
               <h2>Gestion des heures</h2>
             </div>
+
+<div id="foremanAssignmentCard" class="card foreman-assignment-card">
+  <div class="eyebrow">MON ÉQUIPE</div>
+  <h3>Chantier et employés supervisés</h3>
+  <p class="muted small">Les heures, approbations et corrections affichées plus bas seront limitées à ce chantier et à ces employés.</p>
+
+  <label>Chantier supervisé
+    <select id="foremanSiteSelect">
+      <option value="">Choisir un chantier…</option>
+    </select>
+  </label>
+
+  <div class="foreman-employees-head">
+    <strong>Employés que je gère</strong>
+    <span id="foremanEmployeesCount" class="muted small">0 sélectionné</span>
+  </div>
+
+  <div id="foremanEmployeePicker" class="foreman-employee-picker">
+    <p class="muted">Chargement...</p>
+  </div>
+
+  <button id="saveForemanAssignmentBtn" class="primary">Enregistrer mon équipe</button>
+  <div id="foremanAssignmentStatus" class="muted small"></div>
+</div>
+
           </section>
 
           <section id="roleViewAdmin" class="role-view hidden">
@@ -197,7 +222,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.4.1"></script>
+  <script type="module" src="app.js?v=3.5.0"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

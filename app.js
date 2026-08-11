@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.4.1';
+const APP_VERSION = '3.5.0';
 
 
 
@@ -280,10 +280,12 @@ async function loadHistory(){
 async function loadAdmin(){
   if(!canManageTime())return;
   const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
-  const present=openSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const present=openSnap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
   $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
 
-  const snap=await getDocs(collection(db,'punches'));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
+  const snap=await getDocs(collection(db,'punches'));
+  const rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
+  window.__adminRows=rows;
   $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   if(canManageUsers()) await loadEmployees(); await loadCorrections();
@@ -301,6 +303,7 @@ async function setUserActive(uid,active){if(!canManageUsers())return alert('Seul
 
 function openEditModal(sessionId,asAdmin){
   const rows=asAdmin?(window.__adminRows||[]):myRows; editingSession=rows.find(r=>r.id===sessionId); if(!editingSession)return;
+  if(asAdmin && isForemanMode() && !foremanCanSeeRecord(editingSession)){editingSession=null;return alert('Cet employé ne fait pas partie de ton équipe.');}
   editingAsAdmin=asAdmin; $('editModalTitle').textContent=asAdmin?'Modifier les heures':'Demander une correction';
   $('editStart').value=dtLocal(editingSession.startAt); $('editEnd').value=dtLocal(editingSession.endAt); $('editReason').value=''; show('reasonWrap',!asAdmin);
   $('saveEditBtn').textContent=asAdmin?'Enregistrer':'Envoyer la demande'; msg('editMsg',''); show('editModal',true);
@@ -315,18 +318,49 @@ async function saveEdit(){
       closeEdit();await refreshAll();return;
     }
     const reason=$('editReason').value.trim();if(!reason)throw new Error('Inscris la raison de la correction.');
-    await addDoc(collection(db,'correctionRequests'),{sessionId:editingSession.id,userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,originalStart:editingSession.startAt,originalEnd:editingSession.endAt||null,requestedStart:Timestamp.fromDate(new Date(start)),requestedEnd:end?Timestamp.fromDate(new Date(end)):null,reason,status:'pending',createdAt:serverTimestamp()});
+    await addDoc(collection(db,'correctionRequests'),{sessionId:editingSession.id,userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId:editingSession.siteId||'',siteName:editingSession.siteName||'',originalStart:editingSession.startAt,originalEnd:editingSession.endAt||null,requestedStart:Timestamp.fromDate(new Date(start)),requestedEnd:end?Timestamp.fromDate(new Date(end)):null,reason,status:'pending',createdAt:serverTimestamp()});
     msg('editMsg','Demande envoyée à l’administrateur.');setTimeout(closeEdit,900);
   }catch(e){msg('editMsg',e.message)}
 }
 
 async function loadCorrections(){
-  const snap=await getDocs(query(collection(db,'correctionRequests'),where('status','==','pending')));const reqs=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $('correctionList').innerHTML=reqs.length?reqs.map(r=>`<div class="list-item correction-row"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${fmtDateTime(r.originalStart)} → ${fmtDateTime(r.originalEnd)}<br>Demandé : ${fmtDateTime(r.requestedStart)} → ${fmtDateTime(r.requestedEnd)}<br>${escapeHtml(r.reason||'')}</small></div><div class="row-actions"><button class="success compact" data-approve="${r.id}">Approuver</button><button class="danger compact" data-reject="${r.id}">Refuser</button></div></div>`).join(''):'<p class="muted">Aucune demande en attente.</p>';
-  document.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewCorrection(b.dataset.approve,true));document.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewCorrection(b.dataset.reject,false));
+  const snap=await getDocs(query(collection(db,'correctionRequests'),where('status','==','pending')));
+  let reqs=snap.docs.map(d=>({id:d.id,...d.data()}));
+
+  if(isForemanMode()){
+    const visible=[];
+    for(const r of reqs){
+      if(!foremanCanSeeCorrection(r)) continue;
+
+      if(foremanAssignment.siteId && !r.siteId && r.sessionId){
+        try{
+          const punchSnap=await getDoc(doc(db,'punches',r.sessionId));
+          if(!punchSnap.exists()) continue;
+          const p={id:punchSnap.id,...punchSnap.data()};
+          if(!foremanCanSeeRecord(p)) continue;
+        }catch(e){
+          continue;
+        }
+      }
+      visible.push(r);
+    }
+    reqs=visible;
+  }
+
+  $('correctionList').innerHTML=reqs.length?reqs.map(r=>`<div class="list-item correction-row"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${fmtDateTime(r.originalStart)} → ${fmtDateTime(r.originalEnd)}<br>Demandé : ${fmtDateTime(r.requestedStart)} → ${fmtDateTime(r.requestedEnd)}<br>${escapeHtml(r.reason||'')}</small></div><div class="row-actions"><button class="success compact" data-approve="${r.id}">Approuver</button><button class="danger compact" data-reject="${r.id}">Refuser</button></div></div>`).join(''):'<p class="muted">Aucune demande en attente pour ton équipe.</p>';
+
+  document.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>reviewCorrection(b.dataset.approve,true));
+  document.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>reviewCorrection(b.dataset.reject,false));
 }
 async function reviewCorrection(id,approve){
   const snap=await getDoc(doc(db,'correctionRequests',id));if(!snap.exists())return;const r=snap.data();
+  if(isForemanMode()){
+    if(!foremanCanSeeCorrection(r)) return alert('Cette demande ne fait pas partie de ton équipe.');
+    if(r.sessionId){
+      const punchSnap=await getDoc(doc(db,'punches',r.sessionId));
+      if(!punchSnap.exists() || !foremanCanSeeRecord({id:punchSnap.id,...punchSnap.data()})) return alert('Cette demande ne fait pas partie de ton chantier.');
+    }
+  }
   try{
     if(approve){await updateDoc(doc(db,'punches',r.sessionId),{startAt:r.requestedStart,endAt:r.requestedEnd||null,status:r.requestedEnd?'closed':'open',updatedAt:serverTimestamp(),corrected:true});}
     await updateDoc(doc(db,'correctionRequests',id),{status:approve?'approved':'rejected',reviewedAt:serverTimestamp(),reviewedBy:currentUser.uid});await refreshAll();
@@ -373,6 +407,7 @@ onAuthStateChanged(auth,async user=>{
   prepareRoleViews();
   setupRoleMenu();
   refreshRoleMenu();
+  await loadForemanAssignment();
   switchRoleTab('employee');
   await refreshAll();
 });
@@ -503,7 +538,7 @@ function v3endValue(p){ return p.endAt||p.endTime||p.clockOut; }
 async function v3approvals(){
   const box=v3el("approvalList"); if(!box) return;
   const q=await getDocs(collection(db,"punches"));
-  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true);
+  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true).filter(foremanCanSeeRecord);
   box.innerHTML=rows.length?rows.map(p=>`<div class="approval-item"><strong>${p.userName||p.userEmail||"Employé"}</strong><span>${p.siteName||p.site||"Chantier"} — ${v3hours(p).toFixed(2)} h</span><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
   box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});await v3approvals(); await v3reports();});
 }
@@ -604,6 +639,140 @@ async function updatePunchTimeV32(punchId, patch){
   });
 }
 
+
+
+
+// ===== Affectation Contremaître v3.5 =====
+let foremanAssignment = { siteId:'', employeeIds:[] };
+
+function isForemanMode(){
+  return currentRole() === ROLE_FOREMAN;
+}
+
+function managedEmployeeSet(){
+  return new Set(foremanAssignment.employeeIds || []);
+}
+
+function foremanCanSeeRecord(record){
+  if(!isForemanMode()) return true;
+  const employeeIds = managedEmployeeSet();
+  if(!employeeIds.has(record.userId)) return false;
+  if(foremanAssignment.siteId && record.siteId !== foremanAssignment.siteId) return false;
+  return true;
+}
+
+function foremanCanSeeCorrection(req){
+  if(!isForemanMode()) return true;
+  const employeeIds = managedEmployeeSet();
+  if(!employeeIds.has(req.userId)) return false;
+
+  // Les anciennes demandes peuvent ne pas contenir siteId.
+  // Dans ce cas on vérifie le punch lié si nécessaire au chargement.
+  if(foremanAssignment.siteId && req.siteId && req.siteId !== foremanAssignment.siteId) return false;
+  return true;
+}
+
+async function loadForemanAssignment(){
+  if(!currentUser || !canManageTime()) return;
+
+  const snap = await getDoc(doc(db,'users',currentUser.uid));
+  const data = snap.exists() ? snap.data() : {};
+  foremanAssignment = {
+    siteId: data.foremanSiteId || '',
+    employeeIds: Array.isArray(data.managedEmployeeIds) ? data.managedEmployeeIds : []
+  };
+
+  await populateForemanAssignmentUI();
+}
+
+async function populateForemanAssignmentUI(){
+  const siteSelect = $('foremanSiteSelect');
+  const picker = $('foremanEmployeePicker');
+  if(!siteSelect || !picker) return;
+
+  const siteSnap = await getDocs(collection(db,'sites'));
+  const sites = siteSnap.docs
+    .map(d=>({id:d.id,...d.data()}))
+    .filter(s=>s.active!==false)
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
+  siteSelect.innerHTML =
+    '<option value="">Choisir un chantier…</option>' +
+    sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name||'Sans nom')}</option>`).join('');
+  siteSelect.value = foremanAssignment.siteId || '';
+
+  const usersSnap = await getDocs(collection(db,'users'));
+  const users = usersSnap.docs
+    .map(d=>({id:d.id,...d.data()}))
+    .filter(u=>u.active!==false && normalizeRole(u.role)==='employee')
+    .sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
+
+  const selected = new Set(foremanAssignment.employeeIds || []);
+
+  picker.innerHTML = users.length ? users.map(u=>`
+    <label class="foreman-employee-choice">
+      <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
+      <span>
+        <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
+        <small>${escapeHtml(u.email||'')}</small>
+      </span>
+    </label>
+  `).join('') : '<p class="muted">Aucun employé actif.</p>';
+
+  picker.querySelectorAll('[data-foreman-employee]').forEach(cb=>{
+    cb.addEventListener('change', updateForemanEmployeeCount);
+  });
+  updateForemanEmployeeCount();
+}
+
+function updateForemanEmployeeCount(){
+  const count = document.querySelectorAll('#foremanEmployeePicker [data-foreman-employee]:checked').length;
+  const label = $('foremanEmployeesCount');
+  if(label) label.textContent = `${count} sélectionné${count>1?'s':''}`;
+}
+
+async function saveForemanAssignment(){
+  if(!canManageTime()) return;
+
+  const siteId = $('foremanSiteSelect')?.value || '';
+  const employeeIds = [...document.querySelectorAll('#foremanEmployeePicker [data-foreman-employee]:checked')]
+    .map(cb=>cb.dataset.foremanEmployee);
+
+  if(!siteId){
+    alert('Choisis un chantier.');
+    return;
+  }
+  if(!employeeIds.length){
+    alert('Sélectionne au moins un employé.');
+    return;
+  }
+
+  await updateDoc(doc(db,'users',currentUser.uid),{
+    foremanSiteId: siteId,
+    managedEmployeeIds: employeeIds,
+    foremanAssignmentUpdatedAt: serverTimestamp()
+  });
+
+  foremanAssignment = { siteId, employeeIds };
+
+  if($('foremanAssignmentStatus')){
+    $('foremanAssignmentStatus').textContent = 'Équipe enregistrée.';
+  }
+
+  await loadAdmin();
+  if(typeof v3approvals === 'function') await v3approvals();
+}
+
+function setupForemanAssignmentUI(){
+  $('saveForemanAssignmentBtn')?.addEventListener('click', async()=>{
+    try{
+      await saveForemanAssignment();
+    }catch(e){
+      alert('Impossible d’enregistrer l’équipe : '+e.message);
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', setupForemanAssignmentUI);
 
 
 // ===== Menu hamburger + vrais onglets par rôle v3.4 =====
@@ -745,6 +914,7 @@ async function switchRoleTab(tab){
   // Recharge les données nécessaires au moment où on ouvre un onglet.
   try{
     if(tab === 'foreman' && canManageTime()){
+      await loadForemanAssignment();
       await loadAdmin();
       if(typeof v3approvals === 'function') await v3approvals();
     }

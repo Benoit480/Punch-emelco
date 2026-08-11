@@ -1,32 +1,20 @@
-# Punch Emelco v3.4 — Menu par rôle corrigé
+# Punch Emelco v3.5 — Équipe du contremaître
 
-Cette version corrige la dernière patch du menu.
+Ajout dans l'onglet Contremaître :
 
-## Fonctionnement
+- choix d'un chantier supervisé;
+- sélection des employés gérés;
+- sauvegarde de l'équipe dans le profil du contremaître.
 
-- Employé :
-  - Mon espace seulement
+Ensuite, le contremaître voit seulement :
 
-- Contremaître :
-  - Mon espace
-  - Onglet Contremaître
-  - Présents maintenant
-  - Demandes de correction
-  - Feuilles de temps
-  - Approbation / modification des heures
+- les employés sélectionnés présents sur son chantier;
+- leurs feuilles de temps;
+- leurs heures à approuver;
+- leurs demandes de correction.
 
-- Administrateur :
-  - Mon espace
-  - Onglet Contremaître
-  - Onglet Administration
-  - Gestion des chantiers
-  - Gestion des employés et rôles
-  - Gestion chantier avancée
-  - Rapports et exports
-  - Contrôle total
+L'administrateur conserve l'accès complet à tout.
 
-Le bouton ☰ est maintenant intégré dans l'en-tête.
-Ce sont de vrais onglets : le contenu change au lieu de simplement faire défiler la page.
-
-Le cache du service worker et les versions CSS/JS ont aussi été changés
-pour éviter que l'iPhone conserve l'ancienne patch.
+La sélection est enregistrée dans le document utilisateur du contremaître :
+- `foremanSiteId`
+- `managedEmployeeIds`

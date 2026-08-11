@@ -13,13 +13,54 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.1.1';
+const APP_VERSION = '3.2.0';
 
 
 
 function isOwnerEmail(email) {
   return (email || '').trim().toLowerCase() === OWNER_EMAIL;
 }
+
+
+// ===== Gestion des rôles v3.2 =====
+const ROLE_EMPLOYEE = 'employee';
+const ROLE_FOREMAN = 'foreman';
+const ROLE_ADMIN = 'admin';
+
+function normalizeRole(role){
+  if(role === ROLE_ADMIN || role === ROLE_FOREMAN || role === ROLE_EMPLOYEE) return role;
+  return ROLE_EMPLOYEE;
+}
+
+function currentRole(){
+  if(isOwnerEmail(auth.currentUser?.email)) return ROLE_ADMIN;
+  return normalizeRole(currentProfile?.role);
+}
+
+function canManageTime(){
+  const r = currentRole();
+  return r === ROLE_FOREMAN || r === ROLE_ADMIN;
+}
+
+function canManageUsers(){
+  return currentRole() === ROLE_ADMIN;
+}
+
+function canApproveHours(){
+  const r = currentRole();
+  return r === ROLE_FOREMAN || r === ROLE_ADMIN;
+}
+
+function canEditUserRole(targetRole){
+  return currentRole() === ROLE_ADMIN;
+}
+
+function roleLabel(role){
+  if(role === ROLE_ADMIN) return 'Administrateur';
+  if(role === ROLE_FOREMAN) return 'Contremaître';
+  return 'Employé';
+}
+
 
 
 function toMillisSafe(value) {
@@ -196,6 +237,7 @@ function renderPresence(){
   if(on&&currentOpenSession.siteId)$('siteSelect').value=currentOpenSession.siteId;
   $('workTypeSelect').value=(on&&currentOpenSession.workType)?currentOpenSession.workType:'';
   renderMealBreak();
+  applyRoleUI();
 }
 
 async function punchIn(){
@@ -253,7 +295,8 @@ async function loadEmployees(){
   document.querySelectorAll('[data-role-user]').forEach(s=>s.onchange=()=>setUserRole(s.dataset.roleUser,s.value));
   document.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>setUserActive(b.dataset.userToggle,b.dataset.active!=='true'));
 }
-async function setUserRole(uid,role){try{await updateDoc(doc(db,'users',uid),{role,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de changer le rôle : '+e.message)}}
+async function setUserRole(uid,role){
+  if(!canManageUsers()) throw new Error('Seul un administrateur peut modifier les rôles.');try{await updateDoc(doc(db,'users',uid),{role,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de changer le rôle : '+e.message)}}
 async function setUserActive(uid,active){try{await updateDoc(doc(db,'users',uid),{active,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de modifier le compte : '+e.message)}}
 
 function openEditModal(sessionId,asAdmin){
@@ -494,3 +537,54 @@ document.addEventListener("click",async ev=>{
     if(!r.bypass){ev.preventDefault();ev.stopImmediatePropagation();b.dataset.v3ok="1";b.click();}
   }catch(e){ev.preventDefault();ev.stopImmediatePropagation();alert("Impossible de valider le GPS : "+e.message);}
 },true);
+
+
+
+function applyRoleUI(){
+  const r = currentRole();
+  const isAdmin = r === ROLE_ADMIN;
+  const isForeman = r === ROLE_FOREMAN;
+
+  // Admin only
+  document.querySelectorAll('[data-role-admin-only], .admin-only').forEach(el=>{
+    el.classList.toggle('hidden', !isAdmin);
+  });
+
+  // Foreman + Admin
+  document.querySelectorAll('[data-role-time-manager], .time-manager-only').forEach(el=>{
+    el.classList.toggle('hidden', !(isAdmin || isForeman));
+  });
+
+  // Update visible role labels
+  document.querySelectorAll('[data-role-label]').forEach(el=>{
+    el.textContent = roleLabel(r);
+  });
+}
+
+
+
+async function setEmployeeRoleV32(userId, newRole){
+  if(!canManageUsers()) throw new Error('Seul un administrateur peut modifier les rôles.');
+  const role = normalizeRole(newRole);
+  await updateDoc(doc(db,'users',userId), { role, updatedAt:serverTimestamp() });
+}
+
+async function approvePunchV32(punchId){
+  if(!canApproveHours()) throw new Error('Accès réservé au contremaître ou à l’administrateur.');
+  await updateDoc(doc(db,'punches',punchId), {
+    approved:true,
+    approvedBy:auth.currentUser?.uid || '',
+    approvedAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+  });
+}
+
+async function updatePunchTimeV32(punchId, patch){
+  if(!canManageTime()) throw new Error('Accès réservé au contremaître ou à l’administrateur.');
+  await updateDoc(doc(db,'punches',punchId), {
+    ...patch,
+    editedBy:auth.currentUser?.uid || '',
+    editedAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+  });
+}

@@ -1,19 +1,37 @@
-# Punch Travail v3.0 — Chantier
+# Punch Emelco v3.2 — 3 rôles
 
-Ajouts :
-- géofence par chantier;
-- adresse, numéro de projet et contremaître;
-- latitude/longitude + rayon configurable;
-- note quotidienne;
-- photo facultative;
-- approbation des heures;
-- rapports par chantier;
-- export CSV paie;
-- aucune gestion de pause.
+Rôles ajoutés :
 
-Compte propriétaire : `benoit2568@hotmail.com`
+- Employé
+- Contremaître
+- Administrateur
 
-Important : la v3.0 ajoute la collection `dailyNotes`.
-Dans Firebase > Cloud Firestore > Règles, remplace les règles par le fichier `firestore.rules` inclus puis publie.
+## Permissions
 
-Ensuite, remplace les fichiers GitHub par ceux du ZIP et fais Commit changes.
+Employé :
+- Punch entrée/sortie
+- Repas 30 min
+- Voir ses propres heures et historique
+
+Contremaître :
+- Tout ce qu'un employé peut faire
+- Voir/modifier les heures des employés
+- Approuver les heures et corrections
+- Ne peut pas modifier les rôles
+- Ne peut pas donner le rôle administrateur
+
+Administrateur :
+- Contrôle total
+- Gestion des utilisateurs
+- Gestion des rôles
+- Gestion des chantiers
+- Gestion des heures
+- Approbations
+- Rapports, exports et paramètres
+
+Compte propriétaire conservé : `benoit2568@hotmail.com`
+
+## Important
+
+Le fichier `firestore.rules` inclus a été mis à jour pour les trois rôles.
+Publie ces règles dans Firebase > Cloud Firestore > Règles.

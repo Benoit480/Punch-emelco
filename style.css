@@ -100,3 +100,9 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 .meal-btn{width:100%;background:#d79a22;color:#111;font-weight:800;border:0;border-radius:12px;padding:14px 16px}
 .meal-btn:disabled{opacity:.65}
 #mealBreakStatus{margin-top:7px;text-align:center}
+
+
+/* Gestion des rôles */
+.role-grid{display:grid;gap:10px}
+.role-grid>div{display:grid;gap:4px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px}
+.role-grid span{opacity:.75;font-size:.92rem}

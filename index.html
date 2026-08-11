@@ -103,7 +103,7 @@
         </section>
       </section>
     
-<section id="constructionAdmin" class="panel admin-panel hidden">
+<section id="constructionAdmin" class="panel admin-panel hidden" data-role-admin-only class="panel admin-panel hidden admin-only">
   <div class="section-kicker">CHANTIER</div>
   <h2 id="advancedSiteTitle">Gestion chantier avancée</h2>
   <label>Chantier à modifier<select id="advancedSiteSelect"><option value="">Choisir un chantier…</option></select></label>
@@ -133,13 +133,13 @@
   <div id="dailyNoteStatus" class="muted"></div>
 </section>
 
-<section id="approvalAdmin" class="panel admin-panel hidden">
+<section id="approvalAdmin" class="panel admin-panel hidden" data-role-time-manager>
   <div class="section-kicker">APPROBATION</div>
   <h2>Heures à approuver</h2>
   <div id="approvalList"></div>
 </section>
 
-<section id="siteReportsAdmin" class="panel admin-panel hidden">
+<section id="siteReportsAdmin" class="panel admin-panel hidden" data-role-admin-only class="panel admin-panel hidden admin-only">
   <div class="section-kicker">RAPPORTS</div>
   <h2>Rapports par chantier</h2>
   <div class="row-actions">
@@ -147,6 +147,17 @@
     <button id="exportPayrollBtn" class="btn-primary">Exporter paie CSV</button>
   </div>
   <div id="siteReportsList"></div>
+</section>
+
+
+<section id="rolesInfo" class="panel admin-only hidden" data-role-admin-only>
+  <div class="section-kicker">RÔLES</div>
+  <h2>Permissions</h2>
+  <div class="role-grid">
+    <div><strong>Employé</strong><span>Punch, repas 30 min, ses heures et son historique.</span></div>
+    <div><strong>Contremaître</strong><span>Accès aux heures des employés, modifications et approbations.</span></div>
+    <div><strong>Administrateur</strong><span>Contrôle total, utilisateurs, rôles, chantiers, heures, rapports et paramètres.</span></div>
+  </div>
 </section>
 
 </main>

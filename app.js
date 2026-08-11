@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAYCAZEqryNI9wQ6kpnHmCsHK04R5Qk2Lg",
@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.6.2';
+const APP_VERSION = '3.6.3';
 
 
 
@@ -375,7 +375,23 @@ function exportCsv(){
 }
 async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(canManageTime())await loadAdmin()}
 
-$('loginBtn').onclick=async()=>{try{msg('authMsg','');await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value)}catch(e){msg('authMsg','Connexion impossible. Vérifie le courriel et le mot de passe.')}};
+$('loginBtn').onclick=async()=>{
+  const btn=$('loginBtn');
+  try{
+    msg('authMsg','Connexion...');
+    if(btn) btn.disabled=true;
+    await signInWithEmailAndPassword(
+      auth,
+      $('email').value.trim(),
+      $('password').value
+    );
+  }catch(e){
+    console.error('Connexion Firebase:',e);
+    msg('authMsg','Connexion impossible : '+(e.code||e.message||'erreur inconnue'));
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+};
 $('showRegisterBtn').onclick=()=>{show('authView',false);show('registerView',true)};$('backLoginBtn').onclick=()=>{show('registerView',false);show('authView',true)};
 $('registerBtn').onclick=async()=>{try{msg('regMsg','');const name=$('regName').value.trim();if(!name)throw new Error('Inscris ton nom.');const cred=await createUserWithEmailAndPassword(auth,$('regEmail').value.trim(),$('regPassword').value);await setDoc(doc(db,'users',cred.user.uid),{name,email:cred.user.email,role:'employee',active:true,createdAt:serverTimestamp()})}catch(e){msg('regMsg',e.message)}};
 $('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;if($('mealBreakBtn'))$('mealBreakBtn').onclick=startMealBreak;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
@@ -383,6 +399,7 @@ $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;$('editM
 
 onAuthStateChanged(auth,async user=>{
   currentUser=user;
+
   if(!user){
     currentProfile=null;
     currentOpenSession=null;
@@ -391,25 +408,68 @@ onAuthStateChanged(auth,async user=>{
     show('dashboard',false);
     show('logoutBtn',false);
     show('menuToggleBtn',false);
+    show('dailyNoteSection',false);
     closeRoleDrawer();
     return;
   }
-  currentProfile=await loadProfile(user.uid);
-  if(!currentProfile){await setDoc(doc(db,'users',user.uid),{name:user.email,email:user.email,role:'employee',active:true,createdAt:serverTimestamp()});currentProfile=await loadProfile(user.uid)}
-  await ensureOwnerAdmin();
-  $('userLine').textContent=`${currentProfile.name||user.email} • ${roleLabel(currentRole())}${currentProfile.active===false?' • Compte désactivé':''}`;
-  show('authView',false);
-  show('registerView',false);
-  show('dashboard',true);
-  show('logoutBtn',true);
-  show('menuToggleBtn',true);
-  show('adminPanel',false);
-  prepareRoleViews();
-  setupRoleMenu();
-  refreshRoleMenu();
-  await loadForemanAssignment();
-  switchRoleTab('employee');
-  await refreshAll();
+
+  try{
+    currentProfile=await loadProfile(user.uid);
+
+    if(!currentProfile){
+      await setDoc(doc(db,'users',user.uid),{
+        name:user.email,
+        email:user.email,
+        role:'employee',
+        active:true,
+        createdAt:serverTimestamp()
+      });
+      currentProfile=await loadProfile(user.uid);
+    }
+
+    // Le propriétaire est toujours admin dans l'interface,
+    // même si la synchronisation du rôle Firestore est refusée.
+    await ensureOwnerAdmin();
+
+    $('userLine').textContent =
+      `${currentProfile.name||user.email} • ${roleLabel(currentRole())}` +
+      `${currentProfile.active===false?' • Compte désactivé':''}`;
+
+    show('authView',false);
+    show('registerView',false);
+    show('dashboard',true);
+    show('logoutBtn',true);
+    show('menuToggleBtn',true);
+    show('dailyNoteSection',true);
+    show('adminPanel',false);
+
+    prepareRoleViews();
+    setupRoleMenu();
+    refreshRoleMenu();
+
+    // Ces fonctions ne doivent jamais bloquer la connexion.
+    try{ await loadForemanAssignment(); }catch(e){ console.warn('Équipe contremaître:',e); }
+    try{ await switchRoleTab('employee'); }catch(e){ console.warn('Onglet employé:',e); }
+    try{ await refreshAll(); }catch(e){
+      console.error('Chargement des données:',e);
+      const punchMsg=$('punchMsg');
+      if(punchMsg) punchMsg.textContent='Connexion réussie, mais certaines données n’ont pas pu être chargées.';
+    }
+  }catch(e){
+    console.error('Erreur après connexion:',e);
+
+    // L'utilisateur est authentifié : on affiche le tableau de bord au lieu
+    // de le laisser coincé sur l'écran Connexion.
+    show('authView',false);
+    show('registerView',false);
+    show('dashboard',true);
+    show('logoutBtn',true);
+    show('menuToggleBtn',true);
+    show('dailyNoteSection',true);
+
+    const punchMsg=$('punchMsg');
+    if(punchMsg) punchMsg.textContent='Connecté. Erreur de chargement : '+(e.message||e);
+  }
 });
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
@@ -889,7 +949,10 @@ function prepareRoleViews(){
 
   // Journal / note quotidienne
   const dailyNote = document.getElementById('dailyNoteSection');
-  if(dailyNote) employeeView.appendChild(dailyNote);
+  if(dailyNote){
+    dailyNote.classList.remove('hidden');
+    employeeView.appendChild(dailyNote);
+  }
 
   // ESPACE CONTREMAÎTRE:
   // Présents maintenant

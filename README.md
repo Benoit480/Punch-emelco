@@ -1,20 +1,12 @@
-# Punch Emelco v3.6 — Suppression avec confirmation
+# Punch Emelco v3.6.3 — Correctif connexion
 
-Ajouts :
+Correctifs :
 
-- bouton **Supprimer** sur les chantiers/projets;
-- bouton **Supprimer** sur les employés;
-- double confirmation avant chaque suppression;
-- impossible de supprimer son propre compte administrateur.
+- tous les modules Firebase utilisent maintenant la même version `12.1.0`;
+- `deleteDoc` reste disponible pour supprimer un chantier;
+- l'écran ne reste plus bloqué sur Connexion si un panneau secondaire échoue;
+- la Note quotidienne est cachée tant que l'utilisateur n'est pas connecté;
+- le bouton Connexion affiche maintenant l'erreur Firebase exacte si la connexion échoue;
+- cache GitHub Pages / service worker changé pour forcer le chargement de cette version.
 
-## Employés
-
-Un employé supprimé est retiré de l'application et de la liste des employés,
-mais ses anciennes feuilles de temps et ses punchs sont conservés.
-
-Il est aussi automatiquement retiré des équipes de contremaîtres.
-
-## Chantiers
-
-Un chantier supprimé disparaît des choix disponibles.
-Les anciennes feuilles de temps qui portent son nom restent conservées.
+Aucune fonction de punch, repas, rôle, contremaître ou suppression n'a été retirée.

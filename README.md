@@ -1,20 +1,20 @@
-# Punch Emelco v3.5 — Équipe du contremaître
+# Punch Emelco v3.6 — Suppression avec confirmation
 
-Ajout dans l'onglet Contremaître :
+Ajouts :
 
-- choix d'un chantier supervisé;
-- sélection des employés gérés;
-- sauvegarde de l'équipe dans le profil du contremaître.
+- bouton **Supprimer** sur les chantiers/projets;
+- bouton **Supprimer** sur les employés;
+- double confirmation avant chaque suppression;
+- impossible de supprimer son propre compte administrateur.
 
-Ensuite, le contremaître voit seulement :
+## Employés
 
-- les employés sélectionnés présents sur son chantier;
-- leurs feuilles de temps;
-- leurs heures à approuver;
-- leurs demandes de correction.
+Un employé supprimé est retiré de l'application et de la liste des employés,
+mais ses anciennes feuilles de temps et ses punchs sont conservés.
 
-L'administrateur conserve l'accès complet à tout.
+Il est aussi automatiquement retiré des équipes de contremaîtres.
 
-La sélection est enregistrée dans le document utilisateur du contremaître :
-- `foremanSiteId`
-- `managedEmployeeIds`
+## Chantiers
+
+Un chantier supprimé disparaît des choix disponibles.
+Les anciennes feuilles de temps qui portent son nom restent conservées.

@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.5.0';
+const APP_VERSION = '3.6.0';
 
 
 
@@ -288,7 +288,7 @@ async function loadAdmin(){
   window.__adminRows=rows;
   $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
-  if(canManageUsers()) await loadEmployees(); await loadCorrections();
+  if(canManageUsers()) await loadEmployees(); await loadCorrections(); setTimeout(()=>{enhanceSiteDeleteButtons();enhanceEmployeeDeleteButtons();},0);
 }
 
 async function loadEmployees(){
@@ -704,7 +704,7 @@ async function populateForemanAssignmentUI(){
   const usersSnap = await getDocs(collection(db,'users'));
   const users = usersSnap.docs
     .map(d=>({id:d.id,...d.data()}))
-    .filter(u=>u.active!==false && normalizeRole(u.role)==='employee')
+    .filter(u=>u.deleted!==true && u.active!==false && normalizeRole(u.role)==='employee')
     .sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
 
   const selected = new Set(foremanAssignment.employeeIds || []);
@@ -773,6 +773,85 @@ function setupForemanAssignmentUI(){
   });
 }
 document.addEventListener('DOMContentLoaded', setupForemanAssignmentUI);
+
+
+
+// ===== Suppression avec confirmation v3.6 =====
+async function deleteSiteWithConfirm(siteId, siteName){
+  if(currentRole() !== ROLE_ADMIN){
+    return alert('Seul un administrateur peut supprimer un chantier.');
+  }
+
+  const ok = confirm(
+    `Supprimer définitivement le chantier « ${siteName || 'Sans nom'} » ?\n\n` +
+    `Il ne sera plus disponible pour les nouveaux punchs. Les anciennes feuilles de temps seront conservées.`
+  );
+  if(!ok) return;
+
+  const second = confirm(
+    `Confirmation finale : veux-tu vraiment supprimer « ${siteName || 'ce chantier'} » ?`
+  );
+  if(!second) return;
+
+  try{
+    await deleteDoc(doc(db,'sites',siteId));
+    await loadSites();
+    await loadAdmin();
+    alert('Chantier supprimé.');
+  }catch(e){
+    alert('Impossible de supprimer le chantier : ' + e.message);
+  }
+}
+
+async function removeEmployeeWithConfirm(userId, userName, userEmail){
+  if(currentRole() !== ROLE_ADMIN){
+    return alert('Seul un administrateur peut supprimer un employé.');
+  }
+
+  if(userId === currentUser?.uid){
+    return alert('Tu ne peux pas supprimer ton propre compte administrateur.');
+  }
+
+  const label = userName || userEmail || 'cet employé';
+  const ok = confirm(
+    `Retirer « ${label} » de l’application ?\n\n` +
+    `Ses anciennes feuilles de temps et punchs seront conservés.`
+  );
+  if(!ok) return;
+
+  const second = confirm(
+    `Confirmation finale : supprimer « ${label} » de la liste des employés ?`
+  );
+  if(!second) return;
+
+  try{
+    // Soft-delete pour préserver l'historique et éviter de briser les anciens punchs.
+    await updateDoc(doc(db,'users',userId),{
+      active:false,
+      deleted:true,
+      deletedAt:serverTimestamp(),
+      deletedBy:currentUser?.uid || ''
+    });
+
+    // Retirer cet employé des équipes des contremaîtres.
+    const usersSnap = await getDocs(collection(db,'users'));
+    for(const d of usersSnap.docs){
+      const u = d.data();
+      if(Array.isArray(u.managedEmployeeIds) && u.managedEmployeeIds.includes(userId)){
+        await updateDoc(doc(db,'users',d.id),{
+          managedEmployeeIds:u.managedEmployeeIds.filter(id=>id!==userId),
+          updatedAt:serverTimestamp()
+        });
+      }
+    }
+
+    await loadEmployees();
+    await loadAdmin();
+    alert('Employé retiré.');
+  }catch(e){
+    alert('Impossible de retirer l’employé : ' + e.message);
+  }
+}
 
 
 // ===== Menu hamburger + vrais onglets par rôle v3.4 =====
@@ -989,3 +1068,67 @@ document.addEventListener('click', async (e)=>{
 }, true);
 
 document.addEventListener('DOMContentLoaded', setupRoleMenu);
+
+
+
+function enhanceSiteDeleteButtons(){
+  document.querySelectorAll('#siteList .list-item').forEach(item=>{
+    if(item.querySelector('[data-delete-site]')) return;
+    const rename = item.querySelector('[data-rename-site]');
+    const id = rename?.dataset.renameSite;
+    if(!id) return;
+    const name = item.querySelector('strong')?.textContent?.trim() || 'Sans nom';
+    const actions = rename.parentElement;
+    const btn = document.createElement('button');
+    btn.className = 'delete compact';
+    btn.textContent = 'Supprimer';
+    btn.dataset.deleteSite = id;
+    btn.dataset.siteName = name;
+    actions?.appendChild(btn);
+  });
+}
+
+function enhanceEmployeeDeleteButtons(){
+  document.querySelectorAll('#employeeList .list-item').forEach(item=>{
+    if(item.querySelector('[data-delete-employee]')) return;
+    const roleSelect = item.querySelector('[data-user-role]');
+    const activeBtn = item.querySelector('[data-user-active]');
+    const uid = roleSelect?.dataset.userRole || activeBtn?.dataset.userActive;
+    if(!uid || uid === currentUser?.uid) return;
+
+    const strong = item.querySelector('strong');
+    const name = strong?.textContent?.trim() || 'Employé';
+    const small = item.querySelector('small')?.textContent || '';
+    const email = small.split('•')[0]?.trim() || '';
+
+    const actions = roleSelect?.parentElement || activeBtn?.parentElement || item;
+    const btn = document.createElement('button');
+    btn.className = 'delete compact';
+    btn.textContent = 'Supprimer';
+    btn.dataset.deleteEmployee = uid;
+    btn.dataset.employeeName = name;
+    btn.dataset.employeeEmail = email;
+    actions.appendChild(btn);
+  });
+}
+
+document.addEventListener('click', async e=>{
+  const siteBtn = e.target.closest?.('[data-delete-site]');
+  if(siteBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    await deleteSiteWithConfirm(siteBtn.dataset.deleteSite, siteBtn.dataset.siteName);
+    return;
+  }
+
+  const empBtn = e.target.closest?.('[data-delete-employee]');
+  if(empBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    await removeEmployeeWithConfirm(
+      empBtn.dataset.deleteEmployee,
+      empBtn.dataset.employeeName,
+      empBtn.dataset.employeeEmail
+    );
+  }
+}, true);

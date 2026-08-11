@@ -312,3 +312,15 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 .foreman-employee-choice small{
   color:#9fb0c8;
 }
+
+
+/* ===== Suppression v3.6 ===== */
+button.delete,
+.delete{
+  background:#8f2430 !important;
+  color:#fff !important;
+  border:1px solid #b83a48 !important;
+}
+button.delete:active{
+  transform:scale(.98);
+}

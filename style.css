@@ -93,3 +93,10 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 .approval-item,.report-item{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}
 .hidden{display:none!important}.small{width:auto;justify-self:start;padding:8px 12px}
 @media(max-width:700px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+
+/* Repas 30 min — seul ajout de cette version */
+.meal-break-wrap{margin-top:12px}
+.meal-btn{width:100%;background:#d79a22;color:#111;font-weight:800;border:0;border-radius:12px;padding:14px 16px}
+.meal-btn:disabled{opacity:.65}
+#mealBreakStatus{margin-top:7px;text-align:center}

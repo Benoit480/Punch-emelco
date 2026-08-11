@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.1.1';
 
 
 
@@ -64,6 +64,79 @@ const fmtTime=t=>t?toDate(t).toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'
 const fmtDate=t=>t?toDate(t).toLocaleDateString('fr-CA'):'—';
 const fmtDateTime=t=>t?toDate(t).toLocaleString('fr-CA',{dateStyle:'short',timeStyle:'short'}):'—';
 const hoursBetween=(a,b)=>{if(!a||!b)return 0;return Math.max(0,(toDate(b)-toDate(a))/36e5)};
+
+const MEAL_MINUTES=30;
+let mealTimer=null;
+
+function mealDeductionMinutes(r, endOverride=null){
+  if(!r?.mealStartAt)return 0;
+  const start=toDate(r.mealStartAt);
+  const recordedEnd=r.mealEndAt?toDate(r.mealEndAt):null;
+  const effectiveEnd=recordedEnd || (endOverride?toDate(endOverride):new Date());
+  if(!start||!effectiveEnd)return 0;
+  return Math.max(0,Math.min(MEAL_MINUTES,(effectiveEnd-start)/60000));
+}
+function paidHoursBetweenSession(r,endOverride=null){
+  const end=endOverride || r?.endAt;
+  if(!r?.startAt||!end)return 0;
+  return Math.max(0,hoursBetween(r.startAt,end)-mealDeductionMinutes(r,end)/60);
+}
+async function finalizeMealIfNeeded(){
+  if(!currentOpenSession?.mealStartAt || currentOpenSession?.mealEndAt)return;
+  const elapsed=(Date.now()-toDate(currentOpenSession.mealStartAt).getTime())/60000;
+  if(elapsed>=MEAL_MINUTES){
+    await updateDoc(doc(db,'punches',currentOpenSession.id),{
+      mealEndAt:Timestamp.fromDate(new Date(toDate(currentOpenSession.mealStartAt).getTime()+MEAL_MINUTES*60000)),
+      mealDurationMinutes:MEAL_MINUTES,
+      updatedAt:serverTimestamp()
+    });
+    currentOpenSession.mealEndAt=Timestamp.fromDate(new Date(toDate(currentOpenSession.mealStartAt).getTime()+MEAL_MINUTES*60000));
+    currentOpenSession.mealDurationMinutes=MEAL_MINUTES;
+  }
+}
+function renderMealBreak(){
+  const wrap=$('mealBreakWrap'),btn=$('mealBreakBtn'),status=$('mealBreakStatus');
+  if(!wrap||!btn||!status)return;
+  clearInterval(mealTimer);mealTimer=null;
+  const on=!!currentOpenSession;
+  wrap.classList.toggle('hidden',!on);
+  if(!on){status.textContent='';return;}
+  const used=!!currentOpenSession.mealStartAt;
+  btn.disabled=used || currentProfile?.active===false;
+  if(!used){btn.textContent='🍽️ Repas 30 min';status.textContent='';return;}
+  const update=async()=>{
+    const start=toDate(currentOpenSession.mealStartAt);
+    const elapsed=Math.max(0,Date.now()-start.getTime());
+    const remaining=Math.max(0,MEAL_MINUTES*60000-elapsed);
+    if(remaining<=0){
+      clearInterval(mealTimer);mealTimer=null;
+      try{await finalizeMealIfNeeded();}catch(e){console.warn(e)}
+      btn.textContent='🍽️ Repas utilisé';
+      status.textContent='Repas terminé — temps de travail repris automatiquement.';
+      return;
+    }
+    const totalSec=Math.ceil(remaining/1000),m=Math.floor(totalSec/60),s=totalSec%60;
+    btn.textContent='🍽️ Repas en cours';
+    status.textContent=`Pause repas : ${m}:${String(s).padStart(2,'0')} restante`;
+  };
+  update();mealTimer=setInterval(update,1000);
+}
+async function startMealBreak(){
+  try{
+    if(!currentOpenSession)throw new Error('Tu dois être punché au travail.');
+    if(currentOpenSession.mealStartAt)throw new Error('Le repas de 30 minutes a déjà été utilisé pour ce quart.');
+    await updateDoc(doc(db,'punches',currentOpenSession.id),{
+      mealStartAt:serverTimestamp(),
+      mealEndAt:null,
+      mealDurationMinutes:0,
+      mealUsed:true,
+      updatedAt:serverTimestamp()
+    });
+    await findOpenSession();
+    renderMealBreak();
+  }catch(e){alert(e.message)}
+}
+
 const show=(id,on=true)=>$(id).classList.toggle('hidden',!on);
 const msg=(id,text)=>$(id).textContent=text||'';
 const dtLocal=d=>{if(!d)return'';const x=toDate(d),pad=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`};
@@ -122,6 +195,7 @@ function renderPresence(){
   $('workTypeSelect').disabled=!on || currentProfile?.active===false;
   if(on&&currentOpenSession.siteId)$('siteSelect').value=currentOpenSession.siteId;
   $('workTypeSelect').value=(on&&currentOpenSession.workType)?currentOpenSession.workType:'';
+  renderMealBreak();
 }
 
 async function punchIn(){
@@ -140,7 +214,13 @@ async function punchOut(){
     const workType=$('workTypeSelect').value;
     if(!workType)throw new Error('Choisis sur quoi tu as travaillé avant de faire ton punch sortie.');
     $('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
-    await updateDoc(doc(db,'punches',currentOpenSession.id),{workType,endAt:serverTimestamp(),status:'closed',endGps:gps,updatedAt:serverTimestamp()});
+    const mealPatch={};
+    if(currentOpenSession.mealStartAt && !currentOpenSession.mealEndAt){
+      const mins=mealDeductionMinutes(currentOpenSession,new Date());
+      mealPatch.mealEndAt=serverTimestamp();
+      mealPatch.mealDurationMinutes=Math.min(MEAL_MINUTES,mins);
+    }
+    await updateDoc(doc(db,'punches',currentOpenSession.id),{workType,endAt:serverTimestamp(),status:'closed',endGps:gps,...mealPatch,updatedAt:serverTimestamp()});
     $('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
   }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
@@ -148,10 +228,10 @@ async function punchOut(){
 async function loadHistory(){
   const snap=await getDocs(query(collection(db,'punches'), where('userId','==',currentUser.uid)));
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="7">Aucun punch.</td></tr>';
+  $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="7">Aucun punch.</td></tr>';
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
   const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=(now.getDay()+6)%7,startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
-  let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=hoursBetween(r.startAt,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
+  let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=paidHoursBetweenSession(r,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
   $('todayHours').textContent=today.toFixed(2)+' h';$('weekHours').textContent=week.toFixed(2)+' h';$('overtimeHours').textContent=Math.max(0,week-40).toFixed(2)+' h';
 }
 
@@ -162,7 +242,7 @@ async function loadAdmin(){
   $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
 
   const snap=await getDocs(collection(db,'punches'));const rows=snap.docs.map(d=>({id:d.id,...d.data()}));window.__adminRows=rows;
-  $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2)+' h':'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
+  $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   await loadEmployees(); await loadCorrections();
 }
@@ -212,7 +292,7 @@ async function reviewCorrection(id,approve){
 
 function exportCsv(){
   const rows=window.__adminRows||[],lines=[['Employé','Courriel','Date','Chantier','Type de travail','Entrée','Sortie','Total heures']];
-  for(const r of rows)lines.push([r.userName||'',r.userEmail||'',fmtDate(r.startAt),r.siteName||'',r.workType||'',fmtTime(r.startAt),fmtTime(r.endAt),r.endAt?hoursBetween(r.startAt,r.endAt).toFixed(2):'']);
+  for(const r of rows)lines.push([r.userName||'',r.userEmail||'',fmtDate(r.startAt),r.siteName||'',r.workType||'',fmtTime(r.startAt),fmtTime(r.endAt),r.endAt?paidHoursBetweenSession(r).toFixed(2):'']);
   const csv=lines.map(a=>a.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n'),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='feuilles-de-temps.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -221,7 +301,7 @@ async function refreshAll(){await loadSites();await findOpenSession();await load
 $('loginBtn').onclick=async()=>{try{msg('authMsg','');await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value)}catch(e){msg('authMsg','Connexion impossible. Vérifie le courriel et le mot de passe.')}};
 $('showRegisterBtn').onclick=()=>{show('authView',false);show('registerView',true)};$('backLoginBtn').onclick=()=>{show('registerView',false);show('authView',true)};
 $('registerBtn').onclick=async()=>{try{msg('regMsg','');const name=$('regName').value.trim();if(!name)throw new Error('Inscris ton nom.');const cred=await createUserWithEmailAndPassword(auth,$('regEmail').value.trim(),$('regPassword').value);await setDoc(doc(db,'users',cred.user.uid),{name,email:cred.user.email,role:'employee',active:true,createdAt:serverTimestamp()})}catch(e){msg('regMsg',e.message)}};
-$('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
+$('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;if($('mealBreakBtn'))$('mealBreakBtn').onclick=startMealBreak;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
 $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
 
 onAuthStateChanged(auth,async user=>{
@@ -346,9 +426,8 @@ async function v3saveDailyNote(){
 }
 
 function v3hours(p){
-  const a=v3toMillis(p.startAt||p.startTime||p.clockIn||p.createdAt);
-  const b=v3toMillis(p.endAt||p.endTime||p.clockOut);
-  return a&&b&&b>=a?(b-a)/3600000:0;
+  const end=v3endValue(p);
+  return end?paidHoursBetweenSession(p,end):0;
 }
 
 function v3isClosedPunch(p){

@@ -272,10 +272,45 @@ async function loadHistory(){
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
   $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="7">Aucun punch.</td></tr>';
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
-  const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=(now.getDay()+6)%7,startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
+  const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=now.getDay(),startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
   let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=paidHoursBetweenSession(r,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
-  $('todayHours').textContent=today.toFixed(2)+' h';$('weekHours').textContent=week.toFixed(2)+' h';$('overtimeHours').textContent=Math.max(0,week-40).toFixed(2)+' h';
+  $('todayHours').textContent=today.toFixed(2)+' h';$('weekHours').textContent=week.toFixed(2)+' h';if($('overtimeHours'))$('overtimeHours').textContent='0 h';
 }
+
+
+let payWeekOffset=0;
+function startOfPayWeek(offset=0){
+  const now=new Date();
+  const d=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  d.setDate(d.getDate()-d.getDay()+(offset*7)); // dimanche
+  d.setHours(0,0,0,0);
+  return d;
+}
+function endOfPayWeek(offset=0){const d=startOfPayWeek(offset);d.setDate(d.getDate()+7);return d;}
+function shortFrDate(d){return d.toLocaleDateString('fr-CA',{day:'numeric',month:'short'});}
+function longFrDay(d){return d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'long'});}
+function renderGroupedTimesheets(allRows){
+  const box=$('adminTimesGrouped'); if(!box)return;
+  const start=startOfPayWeek(payWeekOffset), end=endOfPayWeek(payWeekOffset);
+  const rows=(allRows||[]).filter(r=>r.startAt && toDate(r.startAt)>=start && toDate(r.startAt)<end)
+    .sort((a,b)=>toDate(a.startAt)-toDate(b.startAt));
+  if($('payWeekLabel')) $('payWeekLabel').textContent=payWeekOffset===0?'Semaine en cours':payWeekOffset===-1?'Semaine précédente':'Semaine sélectionnée';
+  if($('payWeekDates')) $('payWeekDates').textContent=`${shortFrDate(start)} au ${shortFrDate(new Date(end.getTime()-86400000))}`;
+  const people=new Map();
+  rows.forEach(r=>{const key=r.userId||r.userEmail||r.userName||'inconnu';if(!people.has(key))people.set(key,{name:r.userName||r.userEmail||'Employé',email:r.userEmail||'',rows:[]});people.get(key).rows.push(r);});
+  if(!people.size){box.innerHTML='<p class="muted empty-week">Aucune heure pour cette semaine.</p>';return;}
+  box.innerHTML=[...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'fr')).map(person=>{
+    const days=new Map(); let weekTotal=0;
+    person.rows.forEach(r=>{const d=toDate(r.startAt), key=`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;if(!days.has(key))days.set(key,{date:d,rows:[]});days.get(key).rows.push(r);if(r.endAt)weekTotal+=paidHoursBetweenSession(r);});
+    const dayHtml=[...days.values()].map(day=>{
+      let dayTotal=0;
+      const entries=day.rows.map(r=>{const h=r.endAt?paidHoursBetweenSession(r):0;dayTotal+=h;const meal=r.mealStartAt?`<span class="meal-chip">Repas -${Math.round(mealDeductionMinutes(r,r.endAt||new Date()))} min</span>`:'';return `<div class="time-entry"><div class="time-entry-main"><strong>${escapeHtml(r.siteName||'Sans chantier')}</strong><span>${escapeHtml(r.workType||'Type non précisé')}</span></div><div class="time-entry-hours"><span>${fmtTime(r.startAt)} → ${r.endAt?fmtTime(r.endAt):'En cours'}</span>${meal}<strong>${r.endAt?h.toFixed(2)+' h':'—'}</strong></div><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></div>`;}).join('');
+      return `<section class="timesheet-day"><div class="timesheet-day-head"><strong>${longFrDay(day.date)}</strong><span>${dayTotal.toFixed(2)} h</span></div>${entries}</section>`;
+    }).join('');
+    return `<article class="employee-timesheet"><div class="employee-timesheet-head"><div><h3>${escapeHtml(person.name)}</h3>${person.email?`<small>${escapeHtml(person.email)}</small>`:''}</div><div class="week-total"><span>Total semaine</span><strong>${weekTotal.toFixed(2)} h</strong></div></div>${dayHtml}</article>`;
+  }).join('');
+}
+function changePayWeek(delta){payWeekOffset+=delta;renderGroupedTimesheets(window.__adminRows||[]);document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));}
 
 async function loadAdmin(){
   if(!canManageTime())return;
@@ -286,7 +321,7 @@ async function loadAdmin(){
   const snap=await getDocs(collection(db,'punches'));
   const rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
   window.__adminRows=rows;
-  $('adminTimesBody').innerHTML=rows.length?rows.map(r=>`<tr><td>${escapeHtml(r.userName||r.userEmail)}</td><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></td></tr>`).join(''):'<tr><td colspan="8">Aucune feuille de temps.</td></tr>';
+  renderGroupedTimesheets(rows);
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
   if(canManageUsers()) await loadEmployees(); await loadCorrections(); setTimeout(()=>{enhanceSiteDeleteButtons();enhanceEmployeeDeleteButtons();},0);
 }
@@ -394,6 +429,9 @@ $('loginBtn').onclick=async()=>{
 };
 $('showRegisterBtn').onclick=()=>{show('authView',false);show('registerView',true)};$('backLoginBtn').onclick=()=>{show('registerView',false);show('authView',true)};
 $('registerBtn').onclick=async()=>{try{msg('regMsg','');const name=$('regName').value.trim();if(!name)throw new Error('Inscris ton nom.');const cred=await createUserWithEmailAndPassword(auth,$('regEmail').value.trim(),$('regPassword').value);await setDoc(doc(db,'users',cred.user.uid),{name,email:cred.user.email,role:'employee',active:true,createdAt:serverTimestamp()})}catch(e){msg('regMsg',e.message)}};
+
+if($('payWeekPrev'))$('payWeekPrev').onclick=()=>changePayWeek(-1);
+if($('payWeekNext'))$('payWeekNext').onclick=()=>changePayWeek(1);
 $('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;if($('mealBreakBtn'))$('mealBreakBtn').onclick=startMealBreak;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
 $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
 
@@ -598,8 +636,10 @@ function v3endValue(p){ return p.endAt||p.endTime||p.clockOut; }
 async function v3approvals(){
   const box=v3el("approvalList"); if(!box) return;
   const q=await getDocs(collection(db,"punches"));
-  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true).filter(foremanCanSeeRecord);
-  box.innerHTML=rows.length?rows.map(p=>`<div class="approval-item"><strong>${p.userName||p.userEmail||"Employé"}</strong><span>${p.siteName||p.site||"Chantier"} — ${v3hours(p).toFixed(2)} h</span><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
+  const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true).filter(foremanCanSeeRecord).sort((a,b)=>v3toMillis(v3startValue(a))-v3toMillis(v3startValue(b)));
+  const groups=new Map();
+  rows.forEach(p=>{const key=p.userId||p.userEmail||p.userName||'x';if(!groups.has(key))groups.set(key,{name:p.userName||p.userEmail||'Employé',rows:[]});groups.get(key).rows.push(p);});
+  box.innerHTML=groups.size?[...groups.values()].map(g=>`<div class="approval-employee"><div class="approval-employee-head"><strong>${escapeHtml(g.name)}</strong><span>${g.rows.reduce((n,p)=>n+v3hours(p),0).toFixed(2)} h à approuver</span></div>${g.rows.map(p=>{const d=new Date(v3toMillis(v3startValue(p)));return `<div class="approval-item"><div><strong>${longFrDay(d)}</strong><span>${escapeHtml(p.siteName||p.site||'Chantier')} · ${fmtTime(v3startValue(p))} → ${fmtTime(v3endValue(p))}</span></div><strong>${v3hours(p).toFixed(2)} h</strong><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`}).join('')}</div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
   box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});await v3approvals(); await v3reports();});
 }
 

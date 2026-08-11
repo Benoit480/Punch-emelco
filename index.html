@@ -110,7 +110,7 @@
           </section>
           <section class="card stats">
             <h2>Mes heures</h2>
-            <div class="stat-grid"><div><span>Aujourd’hui</span><strong id="todayHours">0 h</strong></div><div><span>Cette semaine</span><strong id="weekHours">0 h</strong></div><div><span>Heures supp.</span><strong id="overtimeHours">0 h</strong></div></div>
+            <div class="stat-grid"><div><span>Aujourd’hui</span><strong id="todayHours">0 h</strong></div><div><span>Cette semaine</span><strong id="weekHours">0 h</strong></div></div><strong id="overtimeHours" class="hidden">0 h</strong>
           </section>
         </div>
 
@@ -143,9 +143,15 @@
             <div id="correctionList" class="list"></div>
           </section>
 
-          <section class="card">
-            <div class="section-head"><h2>Feuilles de temps</h2><button id="exportCsvBtn" class="primary compact">Exporter CSV</button></div>
-            <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Date</th><th>Chantier</th><th>Type</th><th>Entrée</th><th>Sortie</th><th>Total</th><th></th></tr></thead><tbody id="adminTimesBody"></tbody></table></div>
+          <section class="card timesheet-card">
+            <div class="section-head"><div><h2>Feuilles de temps</h2><p class="muted small">Semaine de paie : dimanche au samedi</p></div><button id="exportCsvBtn" class="primary compact">Exporter CSV</button></div>
+            <div class="payweek-nav">
+              <button id="payWeekPrev" class="ghost compact" type="button">‹</button>
+              <div><strong id="payWeekLabel">Semaine en cours</strong><small id="payWeekDates"></small></div>
+              <button id="payWeekNext" class="ghost compact" type="button">›</button>
+            </div>
+            <div id="adminTimesGrouped" class="timesheet-groups"></div>
+            <div class="table-wrap hidden"><table><tbody id="adminTimesBody"></tbody></table></div>
           </section>
         </section>
       </section>

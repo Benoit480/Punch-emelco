@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.2.0';
+const APP_VERSION = '3.3.0';
 
 
 
@@ -278,7 +278,7 @@ async function loadHistory(){
 }
 
 async function loadAdmin(){
-  if(currentProfile?.role!=='admin')return;
+  if(!canManageTime())return;
   const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
   const present=openSnap.docs.map(d=>({id:d.id,...d.data()}));
   $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
@@ -291,7 +291,7 @@ async function loadAdmin(){
 
 async function loadEmployees(){
   const snap=await getDocs(collection(db,'users')); const users=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
-  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${u.role!=='admin'?'selected':''}>Employé</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button></div></div>`).join('');
+  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button></div></div>`).join('');
   document.querySelectorAll('[data-role-user]').forEach(s=>s.onchange=()=>setUserRole(s.dataset.roleUser,s.value));
   document.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>setUserActive(b.dataset.userToggle,b.dataset.active!=='true'));
 }
@@ -339,7 +339,7 @@ function exportCsv(){
   const csv=lines.map(a=>a.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n'),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='feuilles-de-temps.csv';a.click();URL.revokeObjectURL(a.href);
 }
-async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(currentProfile?.role==='admin')await loadAdmin()}
+async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(canManageTime())await loadAdmin()}
 
 $('loginBtn').onclick=async()=>{try{msg('authMsg','');await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value)}catch(e){msg('authMsg','Connexion impossible. Vérifie le courriel et le mot de passe.')}};
 $('showRegisterBtn').onclick=()=>{show('authView',false);show('registerView',true)};$('backLoginBtn').onclick=()=>{show('registerView',false);show('authView',true)};
@@ -353,8 +353,8 @@ onAuthStateChanged(auth,async user=>{
   currentProfile=await loadProfile(user.uid);
   if(!currentProfile){await setDoc(doc(db,'users',user.uid),{name:user.email,email:user.email,role:'employee',active:true,createdAt:serverTimestamp()});currentProfile=await loadProfile(user.uid)}
   await ensureOwnerAdmin();
-  $('userLine').textContent=`${currentProfile.name||user.email} • ${currentProfile.role==='admin'?'Administrateur':'Employé'}${currentProfile.active===false?' • Compte désactivé':''}`;
-  show('authView',false);show('registerView',false);show('dashboard',true);show('logoutBtn',true);show('adminPanel',currentProfile.role==='admin');await refreshAll();
+  $('userLine').textContent=`${currentProfile.name||user.email} • ${roleLabel(currentRole())}${currentProfile.active===false?' • Compte désactivé':''}`;
+  show('authView',false);show('registerView',false);show('dashboard',true);show('logoutBtn',true);show('adminPanel',canManageTime());await refreshAll();
 });
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
@@ -519,9 +519,12 @@ document.addEventListener("DOMContentLoaded",()=>{
   v3advancedSiteSelect()?.addEventListener("change",v3loadSiteDetails);
 
   const sync=()=>{
-    const isAdmin=(document.body.innerText||"").includes("Administrateur");
-    ["constructionAdmin","approvalAdmin","siteReportsAdmin"].forEach(id=>v3el(id)?.classList.toggle("hidden",!isAdmin));
-    if(isAdmin){v3approvals().catch(console.warn);v3reports().catch(console.warn);}
+    const role=currentRole();
+    const isAdmin=role===ROLE_ADMIN, isManager=isAdmin||role===ROLE_FOREMAN;
+    ["constructionAdmin","siteReportsAdmin"].forEach(id=>v3el(id)?.classList.toggle("hidden",!isAdmin));
+    v3el("approvalAdmin")?.classList.toggle("hidden",!isManager);
+    if(isManager)v3approvals().catch(console.warn);
+    if(isAdmin)v3reports().catch(console.warn);
   };
   setTimeout(sync,700); setInterval(sync,5000);
 });
@@ -541,6 +544,7 @@ document.addEventListener("click",async ev=>{
 
 
 function applyRoleUI(){
+  setTimeout(()=>{try{refreshRoleDrawer();}catch(e){}},0);
   const r = currentRole();
   const isAdmin = r === ROLE_ADMIN;
   const isForeman = r === ROLE_FOREMAN;
@@ -588,3 +592,69 @@ async function updatePunchTimeV32(punchId, patch){
     updatedAt:serverTimestamp()
   });
 }
+
+
+
+// ===== Menu hamburger par rôle v3.3 =====
+function drawerRoleRank(role){
+  if(role === 'admin') return 3;
+  if(role === 'foreman') return 2;
+  return 1;
+}
+function drawerCurrentRole(){
+  try{
+    if(typeof currentRole === 'function') return currentRole();
+    if(typeof isOwnerEmail === 'function' && isOwnerEmail(auth.currentUser?.email)) return 'admin';
+    const r = currentProfile?.role || 'employee';
+    return ['employee','foreman','admin'].includes(r) ? r : 'employee';
+  }catch(e){ return 'employee'; }
+}
+function drawerRoleText(role){
+  if(role === 'admin') return 'Administrateur';
+  if(role === 'foreman') return 'Contremaître';
+  return 'Employé';
+}
+function refreshRoleDrawer(){
+  const role = drawerCurrentRole();
+  const rank = drawerRoleRank(role);
+  const label = document.getElementById('drawerRoleLabel');
+  if(label) label.textContent = drawerRoleText(role);
+
+  document.querySelectorAll('.drawer-link[data-min-role]').forEach(btn=>{
+    const need = drawerRoleRank(btn.dataset.minRole || 'employee');
+    btn.classList.toggle('hidden', rank < need);
+  });
+}
+function openRoleDrawer(){
+  refreshRoleDrawer();
+  document.getElementById('roleDrawer')?.classList.add('open');
+  document.getElementById('drawerBackdrop')?.classList.remove('hidden');
+  document.getElementById('roleDrawer')?.setAttribute('aria-hidden','false');
+  document.getElementById('menuToggleBtn')?.setAttribute('aria-expanded','true');
+}
+function closeRoleDrawer(){
+  document.getElementById('roleDrawer')?.classList.remove('open');
+  document.getElementById('drawerBackdrop')?.classList.add('hidden');
+  document.getElementById('roleDrawer')?.setAttribute('aria-hidden','true');
+  document.getElementById('menuToggleBtn')?.setAttribute('aria-expanded','false');
+}
+function goToRoleSection(id){
+  const el = document.getElementById(id);
+  if(el){
+    closeRoleDrawer();
+    setTimeout(()=>el.scrollIntoView({behavior:'smooth', block:'start'}), 60);
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('menuToggleBtn')?.addEventListener('click',()=>{
+    const open = document.getElementById('roleDrawer')?.classList.contains('open');
+    open ? closeRoleDrawer() : openRoleDrawer();
+  });
+  document.getElementById('drawerCloseBtn')?.addEventListener('click', closeRoleDrawer);
+  document.getElementById('drawerBackdrop')?.addEventListener('click', closeRoleDrawer);
+  document.querySelectorAll('.drawer-link[data-target-section]').forEach(btn=>{
+    btn.addEventListener('click',()=>goToRoleSection(btn.dataset.targetSection));
+  });
+  refreshRoleDrawer();
+  setTimeout(refreshRoleDrawer, 1000);
+});

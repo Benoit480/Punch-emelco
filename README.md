@@ -1,3 +1,14 @@
+# Punch Emelco v3.3 — Menu par rôle
+
+Ajout du menu hamburger ☰ en haut à gauche.
+
+- Employé : Mon espace
+- Contremaître : Mon espace + onglet Contremaître
+- Admin : Mon espace + Contremaître + Administration
+
+Les entrées du menu sont automatiquement masquées selon le rôle.
+Le reste de l'application et le repas 30 min sont conservés.
+
 # Punch Emelco v3.2 — 3 rôles
 
 Rôles ajoutés :

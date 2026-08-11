@@ -106,3 +106,104 @@ textarea,input[type=file]{width:100%;box-sizing:border-box}
 .role-grid{display:grid;gap:10px}
 .role-grid>div{display:grid;gap:4px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px}
 .role-grid span{opacity:.75;font-size:.92rem}
+
+
+/* ===== Menu hamburger par rôle v3.3 ===== */
+.menu-toggle{
+  position:fixed;
+  top:max(16px, env(safe-area-inset-top));
+  left:16px;
+  z-index:1200;
+  width:48px;
+  height:48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background:#122036;
+  box-shadow:0 8px 24px rgba(0,0,0,.28);
+}
+.menu-toggle span{
+  width:22px;
+  height:3px;
+  border-radius:3px;
+  background:#fff;
+  display:block;
+}
+.role-drawer{
+  position:fixed;
+  z-index:1300;
+  top:0;
+  left:0;
+  width:min(84vw, 340px);
+  height:100dvh;
+  padding:calc(18px + env(safe-area-inset-top)) 16px 18px;
+  box-sizing:border-box;
+  background:#0c1728;
+  border-right:1px solid rgba(255,255,255,.10);
+  box-shadow:18px 0 40px rgba(0,0,0,.35);
+  transform:translateX(-105%);
+  transition:transform .22s ease;
+  overflow-y:auto;
+}
+.role-drawer.open{transform:translateX(0)}
+.drawer-backdrop{
+  position:fixed;
+  z-index:1250;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(2px);
+}
+.drawer-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:8px 4px 18px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.drawer-title{
+  font-size:1.2rem;
+  font-weight:800;
+}
+.drawer-role{
+  margin-top:4px;
+  opacity:.7;
+  font-size:.92rem;
+}
+.drawer-close{
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background:#17263d;
+  color:#fff;
+  font-size:1.8rem;
+  line-height:1;
+}
+.drawer-nav{
+  display:grid;
+  gap:10px;
+  margin-top:18px;
+}
+.drawer-link{
+  width:100%;
+  text-align:left;
+  padding:15px 14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:#122036;
+  color:#fff;
+  font-weight:750;
+  font-size:1rem;
+}
+.drawer-link:active{transform:scale(.99)}
+.menu-anchor{scroll-margin-top:90px;height:1px}
+#employeeSection,#foremanSection,#adminSection{scroll-margin-top:90px}
+
+@media(min-width:900px){
+  .menu-toggle{left:24px}
+}

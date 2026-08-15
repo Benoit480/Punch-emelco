@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.9.3';
+const APP_VERSION = '3.10.0';
 
 
 
@@ -354,7 +354,8 @@ async function loadAdmin(){
   window.__adminRows=rows;
   renderGroupedTimesheets(rows);
   document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
-  if(canManageUsers()) await loadEmployees(); await loadCorrections(); setTimeout(()=>{enhanceSiteDeleteButtons();enhanceEmployeeDeleteButtons();},0);
+  if(canManageUsers()) await loadEmployees(); await loadCorrections(); setTimeout(()=>{enhanceSiteDeleteButtons();enhanceEmployeeDeleteButtons();
+  enhanceEmployeeEditButtons();},0);
 }
 
 async function loadEmployees(){
@@ -1411,3 +1412,102 @@ function historySegmentsHtml(r){
 function bindHistoryCorrectionButtons(){
   document.querySelectorAll('[data-correct]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.correct,false));
 }
+
+
+
+// ===== Modifier employé v3.10 =====
+let editingEmployeeId = null;
+
+async function openEditEmployeeModal(userId){
+  if(currentRole() !== ROLE_ADMIN){
+    return alert('Seul un administrateur peut modifier un employé.');
+  }
+
+  const snap = await getDoc(doc(db,'users',userId));
+  if(!snap.exists()) return alert('Employé introuvable.');
+
+  const u = snap.data();
+  editingEmployeeId = userId;
+
+  $('editEmployeeName').value = u.name || '';
+  $('editEmployeeEmail').value = u.email || '';
+  $('editEmployeeRole').value = normalizeRole(u.role);
+  $('editEmployeeActive').checked = u.active !== false;
+  $('editEmployeeMsg').textContent = '';
+
+  // Le propriétaire principal ne peut pas perdre son rôle Admin.
+  const isOwnerAccount = (u.email || '').toLowerCase() === 'benoit2568@hotmail.com';
+  $('editEmployeeRole').disabled = isOwnerAccount;
+  $('editEmployeeActive').disabled = isOwnerAccount;
+
+  show('editEmployeeModal', true);
+}
+
+function closeEditEmployeeModal(){
+  editingEmployeeId = null;
+  show('editEmployeeModal', false);
+}
+
+async function saveEditEmployee(){
+  if(currentRole() !== ROLE_ADMIN || !editingEmployeeId) return;
+
+  const snap = await getDoc(doc(db,'users',editingEmployeeId));
+  if(!snap.exists()) return alert('Employé introuvable.');
+  const old = snap.data();
+
+  const isOwnerAccount = (old.email || '').toLowerCase() === 'benoit2568@hotmail.com';
+  const name = $('editEmployeeName').value.trim();
+  let role = normalizeRole($('editEmployeeRole').value);
+  let active = $('editEmployeeActive').checked;
+
+  if(!name) return alert('Entre le nom de l’employé.');
+
+  if(isOwnerAccount){
+    role = ROLE_ADMIN;
+    active = true;
+  }
+
+  await updateDoc(doc(db,'users',editingEmployeeId),{
+    name,
+    role,
+    active,
+    updatedAt:serverTimestamp()
+  });
+
+  $('editEmployeeMsg').textContent = 'Modifications enregistrées.';
+  await loadEmployees();
+  try{ await loadAdmin(); }catch(e){ console.warn(e); }
+  setTimeout(closeEditEmployeeModal, 350);
+}
+
+function enhanceEmployeeEditButtons(){
+  document.querySelectorAll('#employeeList .list-item').forEach(item=>{
+    if(item.querySelector('[data-edit-employee]')) return;
+
+    const roleSelect = item.querySelector('[data-user-role]');
+    const activeBtn = item.querySelector('[data-user-active]');
+    const uid = roleSelect?.dataset.userRole || activeBtn?.dataset.userActive;
+    if(!uid) return;
+
+    const actions = roleSelect?.parentElement || activeBtn?.parentElement || item;
+
+    const btn = document.createElement('button');
+    btn.className = 'secondary compact edit-employee-btn';
+    btn.textContent = 'Modifier';
+    btn.dataset.editEmployee = uid;
+    actions.appendChild(btn);
+  });
+}
+
+document.addEventListener('click', e=>{
+  const btn = e.target.closest?.('[data-edit-employee]');
+  if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openEditEmployeeModal(btn.dataset.editEmployee).catch(err=>alert(err.message));
+}, true);
+
+document.addEventListener('DOMContentLoaded',()=>{
+  $('closeEditEmployeeBtn')?.addEventListener('click',closeEditEmployeeModal);
+  $('saveEditEmployeeBtn')?.addEventListener('click',()=>saveEditEmployee().catch(e=>alert(e.message)));
+});

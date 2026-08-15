@@ -388,3 +388,19 @@ button.delete:active{
 .history-actions{
   margin-top:10px;
 }
+
+
+/* ===== Modifier employé v3.10 ===== */
+.edit-employee-btn{
+  margin-left:8px;
+}
+.edit-employee-active{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:14px 0;
+}
+.edit-employee-active input{
+  width:20px;
+  height:20px;
+}

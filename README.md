@@ -1,6 +1,13 @@
-# Punch Emelco v3.9.3
+# Punch Emelco v3.10 — Modifier un employé
 
-Correctif :
-- ajout de la fonction `fmtDateOnly` manquante;
-- Mon historique peut maintenant afficher les segments chantier/tâche sans erreur;
-- aucun changement au calcul des heures.
+Ajout d'un bouton **Modifier** dans la liste des employés.
+
+L'admin peut modifier :
+- le nom complet;
+- le rôle : Employé / Contremaître / Admin;
+- le statut actif/inactif.
+
+Le courriel est affiché en lecture seule afin de ne pas désynchroniser
+le profil Firestore et le compte Firebase Authentication.
+
+Le compte propriétaire `benoit2568@hotmail.com` reste toujours Admin et actif.

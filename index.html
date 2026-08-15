@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.8.0" />
+  <link rel="stylesheet" href="style.css?v=3.9.0" />
 </head>
 <body>
 <div id="app">
@@ -246,7 +246,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.8.0"></script>
+  <script type="module" src="app.js?v=3.9.0"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">
@@ -271,5 +271,12 @@
   </nav>
 </aside>
 
-</body>
-</html>
+<div id="changeWorkModal" class="modal hidden"><div class="modal-card">
+<div class="modal-head"><h3>Changer chantier / tâche</h3><button id="closeChangeWorkBtn" class="secondary compact">×</button></div>
+<p class="muted small">Le compteur d’heures continue sans interruption.</p>
+<label>Nouveau chantier<select id="changeWorkSite"></select></label>
+<label>Tâche effectuée<select id="changeWorkTask"><option>Bâtiment / structure</option><option>Béton fondation/plancher</option><option>Transport</option><option>Autres</option></select></label>
+<label id="changeWorkOtherWrap" class="hidden">Précision<input id="changeWorkOther" type="text"></label>
+<button id="confirmChangeWorkBtn" class="primary">Confirmer le changement</button>
+</div></div></body>
+<button id="changeWorkBtn" class="secondary hidden">Changer chantier / tâche</button></html>

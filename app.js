@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.8.0';
+const APP_VERSION = '3.9.0';
 
 
 
@@ -1308,4 +1308,37 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('payrollNextWeekBtn')?.addEventListener('click',async()=>{payrollWeekOffset++;await loadForemanPayrollPreview()});
   $('approveOwnWeekBtn')?.addEventListener('click',async()=>{try{await approveForemanOwnWeek()}catch(e){alert(e.message)}});
   $('exportForemanPayrollCsvBtn')?.addEventListener('click',async()=>{try{await exportForemanPayrollCsv()}catch(e){alert(e.message)}});
+});
+
+
+// ===== Changement chantier/tâche v3.9 =====
+async function openChangeWorkModal(){
+ if(!currentOpenSession)return alert('Tu dois être punché.');
+ const s=$('changeWorkSite'),q=await getDocs(collection(db,'sites'));
+ const sites=q.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false);
+ s.innerHTML=sites.map(x=>`<option value="${x.id}" data-name="${escapeHtml(x.name||'')}">${escapeHtml(x.name||'Sans nom')}</option>`).join('');
+ if(currentOpenSession.siteId)s.value=currentOpenSession.siteId;
+ show('changeWorkModal',true);
+}
+function closeChangeWorkModal(){show('changeWorkModal',false)}
+async function confirmChangeWork(){
+ if(!currentOpenSession)return;
+ const s=$('changeWorkSite'),siteId=s.value,siteName=s.selectedOptions[0]?.dataset.name||s.selectedOptions[0]?.textContent||'';
+ let task=$('changeWorkTask').value,other=$('changeWorkOther')?.value.trim()||'';
+ if(task==='Autres'&&other)task='Autres — '+other;
+ const now=Timestamp.now(),segments=Array.isArray(currentOpenSession.workSegments)?[...currentOpenSession.workSegments]:[];
+ if(segments.length&&!segments[segments.length-1].endAt)segments[segments.length-1]={...segments[segments.length-1],endAt:now};
+ if(!segments.length)segments.push({siteId:currentOpenSession.siteId||'',siteName:currentOpenSession.siteName||'',task:currentOpenSession.workType||currentOpenSession.task||'',startAt:currentOpenSession.startAt,endAt:now});
+ segments.push({siteId,siteName,task,startAt:now,endAt:null});
+ await updateDoc(doc(db,'punches',currentOpenSession.id),{siteId,siteName,workType:task,task,workSegments:segments,updatedAt:serverTimestamp()});
+ currentOpenSession={...currentOpenSession,siteId,siteName,workType:task,task,workSegments:segments};
+ closeChangeWorkModal(); if($('punchMsg'))$('punchMsg').textContent='Changement enregistré. Le compteur continue.';
+}
+function refreshChangeWorkButton(){show('changeWorkBtn',!!currentOpenSession)}
+document.addEventListener('DOMContentLoaded',()=>{
+ $('changeWorkBtn')?.addEventListener('click',openChangeWorkModal);
+ $('closeChangeWorkBtn')?.addEventListener('click',closeChangeWorkModal);
+ $('confirmChangeWorkBtn')?.addEventListener('click',()=>confirmChangeWork().catch(e=>alert(e.message)));
+ $('changeWorkTask')?.addEventListener('change',e=>$('changeWorkOtherWrap')?.classList.toggle('hidden',e.target.value!=='Autres'));
+ setInterval(refreshChangeWorkButton,1000);
 });

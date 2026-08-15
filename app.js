@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.10.2';
+const APP_VERSION = '3.10.5';
 
 
 
@@ -361,7 +361,7 @@ async function loadAdmin(){
 
 async function loadEmployees(){
   const snap=await getDocs(collection(db,'users')); const users=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.deleted!==true).sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
-  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button><button class="secondary compact edit-employee-btn" data-edit-employee="${u.id}">Modifier</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
+  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button><button class="secondary compact edit-employee-btn" data-edit-employee="${u.id}">Modifier</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(u.name||u.email||'Employé')}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
   document.querySelectorAll('[data-role-user]').forEach(s=>s.onchange=()=>setUserRole(s.dataset.roleUser,s.value));
   document.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>setUserActive(b.dataset.userToggle,b.dataset.active!=='true'));
 }
@@ -846,7 +846,7 @@ async function populateForemanAssignmentUI(){
     <label class="foreman-employee-choice">
       <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
       <span>
-        <strong>${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}</strong>
+        <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
         <small>${escapeHtml(u.email||'')}</small>
       </span>
     </label>
@@ -1310,7 +1310,7 @@ async function loadForemanPayrollPreview(){
       const d=new Date(k+'T12:00:00'),dt=rr.reduce((s,p)=>s+payrollHours(p),0);
       return `<div class="payroll-day"><div class="payroll-day-head"><strong>${d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'short'})}</strong><span>${dt.toFixed(2)} h</span></div>${rr.map(p=>`<div class="payroll-line"><strong>${escapeHtml(p.siteName||p.site||'Chantier')}</strong><div class="muted">Tâche : ${escapeHtml(payrollTaskLabel(p))}</div><div class="muted">${fmtDateTime(p.startAt||p.startTime||p.clockIn)} → ${fmtDateTime(p.endAt||p.endTime||p.clockOut)}</div><div class="muted">Repas : ${p.mealStartAt?30:0} min · ${payrollStatus(p)}</div></div>`).join('')}</div>`
     }).join('');
-    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
+    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(u.name||u.email||'Employé')}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
   }).join('');
 }
 
@@ -1322,13 +1322,52 @@ async function approveForemanOwnWeek(){
   await loadForemanPayrollPreview();
 }
 
+
+// ===== Export CSV par segments v3.10.4 =====
+function payrollSegmentHours(p, segment){
+  const a=toDate(segment.startAt);
+  const b=toDate(segment.endAt || p.endAt || p.endTime || p.clockOut);
+  if(!a || !b) return 0;
+  let ms=Math.max(0,b-a);
+
+  // Déduire seulement la portion du repas qui chevauche ce segment.
+  if(p.mealStartAt){
+    const mealStart=toDate(p.mealStartAt);
+    let mealEnd=p.mealEndAt?toDate(p.mealEndAt):null;
+    if(mealStart && !mealEnd) mealEnd=new Date(mealStart.getTime()+30*60000);
+    if(mealStart && mealEnd){
+      const overlap=Math.max(0,Math.min(b,mealEnd)-Math.max(a,mealStart));
+      ms=Math.max(0,ms-overlap);
+    }
+  }
+  return ms/36e5;
+}
+function payrollSegmentsForExport(p){
+  const segs=Array.isArray(p.workSegments) ? p.workSegments.filter(s=>s&&s.startAt) : [];
+  if(!segs.length){
+    return [{
+      siteName:p.siteName||p.site||'',
+      task:payrollTaskLabel(p),
+      startAt:p.startAt||p.startTime||p.clockIn,
+      endAt:p.endAt||p.endTime||p.clockOut,
+      hours:payrollHours(p)
+    }];
+  }
+  return segs.map((s,i)=>({
+    siteName:s.siteName||p.siteName||p.site||'',
+    task:s.task||s.workType||'—',
+    startAt:s.startAt,
+    endAt:s.endAt || (i===segs.length-1 ? (p.endAt||p.endTime||p.clockOut) : null),
+    hours:payrollSegmentHours(p,s)
+  }));
+}
+
 async function exportForemanPayrollCsv(){
   const ids=payrollManagedIds(),{start,end}=payrollWeekRange();
   const [ps,us]=await Promise.all([getDocs(collection(db,'punches')),getDocs(collection(db,'users'))]);
   const users=new Map(us.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
   const rows=ps.docs.map(d=>({id:d.id,...d.data()})).filter(p=>ids.has(p.userId)&&payrollInWeek(p)&&(p.endAt||p.endTime||p.clockOut));
 
-  // Regrouper les heures par employé pour rendre le CSV plus lisible dans Excel/Numbers.
   const byEmployee=new Map();
   rows.forEach(p=>{
     if(!byEmployee.has(p.userId)) byEmployee.set(p.userId,[]);
@@ -1337,9 +1376,7 @@ async function exportForemanPayrollCsv(){
 
   const employeeIds=[...byEmployee.keys()].sort((a,b)=>{
     const ua=users.get(a)||{},ub=users.get(b)||{};
-    const na=currentEmployeeName(users,a,ua.name,ua.email);
-    const nb=currentEmployeeName(users,b,ub.name,ub.email);
-    return na.localeCompare(nb,'fr',{sensitivity:'base'});
+    return currentEmployeeName(users,a,ua.name,ua.email).localeCompare(currentEmployeeName(users,b,ub.name,ub.email),'fr',{sensitivity:'base'});
   });
 
   const data=[];
@@ -1348,35 +1385,51 @@ async function exportForemanPayrollCsv(){
 
   employeeIds.forEach((uid,index)=>{
     const u=users.get(uid)||{};
-    const name=currentEmployeeName(users,uid,u.name,u.email);
+    const name=u.name||u.email||'Employé';
     const employeeRows=byEmployee.get(uid).sort((a,b)=>payrollRecordDate(a)-payrollRecordDate(b));
-    const total=employeeRows.reduce((sum,p)=>sum+payrollHours(p),0);
+    const weeklyTotal=employeeRows.reduce((sum,p)=>sum+payrollHours(p),0);
 
     data.push(['EMPLOYÉ',name]);
     if(u.email) data.push(['COURRIEL',u.email]);
-    data.push(['Date','Chantier','Tâche effectuée','Entrée','Sortie','Repas (min)','Heures payables','Statut']);
+    data.push(['Date','Chantier','Tâche effectuée','Début segment','Fin segment','Repas (min)','Heures segment','Statut']);
 
     employeeRows.forEach(p=>{
-      const a=payrollRecordDate(p),b=toDate(p.endAt||p.endTime||p.clockOut);
-      data.push([
-        a?.toLocaleDateString('fr-CA')||'',
-        p.siteName||p.site||'',
-        payrollTaskLabel(p),
-        a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
-        b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
-        p.mealStartAt?30:0,
-        payrollHours(p).toFixed(2),
-        payrollStatus(p)
-      ]);
+      const punchDate=payrollRecordDate(p);
+      const segments=payrollSegmentsForExport(p);
+      const hasMultiple=segments.length>1;
+
+      segments.forEach(seg=>{
+        const a=toDate(seg.startAt),b=toDate(seg.endAt);
+        let mealMinutes=0;
+        if(p.mealStartAt && a && b){
+          const mealStart=toDate(p.mealStartAt);
+          let mealEnd=p.mealEndAt?toDate(p.mealEndAt):null;
+          if(mealStart&&!mealEnd) mealEnd=new Date(mealStart.getTime()+30*60000);
+          if(mealStart&&mealEnd) mealMinutes=Math.round(Math.max(0,Math.min(b,mealEnd)-Math.max(a,mealStart))/60000);
+        }
+        data.push([
+          punchDate?.toLocaleDateString('fr-CA')||'',
+          seg.siteName||'',
+          seg.task||'—',
+          a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
+          b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
+          mealMinutes,
+          Number(seg.hours||0).toFixed(2),
+          payrollStatus(p)
+        ]);
+      });
+
+      if(hasMultiple){
+        data.push(['TOTAL QUART','','','','','',payrollHours(p).toFixed(2),payrollStatus(p)]);
+      }
     });
 
-    data.push(['TOTAL SEMAINE','','','','','',total.toFixed(2),'']);
-    // Deux lignes vides entre chaque employé.
+    data.push(['TOTAL SEMAINE','','','','','',weeklyTotal.toFixed(2),'']);
     if(index<employeeIds.length-1){data.push([]);data.push([]);}
   });
 
   const csv=data.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob=new Blob(['\\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=`paie_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
 }
 

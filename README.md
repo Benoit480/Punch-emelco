@@ -1,9 +1,7 @@
-# Punch Emelco v3.10.2
+# Punch Emelco v3.10.5
 
-Correctif du nom dans les feuilles de temps.
+Correctif du chargement des employés.
 
-Lorsqu'un admin modifie le nom d'un employé, les sections de semaine/paie
-utilisent maintenant le nom actuel dans la collection `users` plutôt que
-le vieux `userName` enregistré dans les anciens punchs.
-
-Les anciennes heures restent intactes; seul le nom affiché est synchronisé.
+- La liste Employés de l'administration s'affiche de nouveau.
+- La sélection d'employés dans l'onglet Contremaître s'affiche de nouveau.
+- Aucun changement aux punchs, feuilles de temps, approbations ou exports CSV.

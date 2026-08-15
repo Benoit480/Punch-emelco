@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.9.0" />
+  <link rel="stylesheet" href="style.css?v=3.9.1" />
 </head>
 <body>
 <div id="app">
@@ -124,6 +124,7 @@
               <button id="mealBreakBtn" class="meal-btn">🍽️ Repas 30 min</button>
               <div id="mealBreakStatus" class="muted small"></div>
             </div>
+            <button id="changeWorkBtn" class="change-work-btn hidden">🔄 Changer chantier / tâche</button>
             <p id="gpsStatus" class="muted small">Le GPS sera demandé au moment du punch.</p>
           </section>
           <section class="card stats">
@@ -246,7 +247,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.9.0"></script>
+  <script type="module" src="app.js?v=3.9.1"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">
@@ -279,4 +280,4 @@
 <label id="changeWorkOtherWrap" class="hidden">Précision<input id="changeWorkOther" type="text"></label>
 <button id="confirmChangeWorkBtn" class="primary">Confirmer le changement</button>
 </div></div></body>
-<button id="changeWorkBtn" class="secondary hidden">Changer chantier / tâche</button></html>
+</html>

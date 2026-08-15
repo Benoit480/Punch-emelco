@@ -332,3 +332,15 @@ button.delete:active{
 /* ===== Export paie contremaître v3.8 ===== */
 .payroll-export-card{margin-bottom:18px}.payroll-week-nav{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;margin:12px 0 16px;text-align:center}.payroll-preview-list{display:grid;gap:14px}.payroll-employee{border:1px solid #263851;border-radius:12px;overflow:hidden;background:#0d192a}.payroll-employee-head,.payroll-day-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.payroll-employee-head{padding:12px 14px;background:#14243a}.payroll-day{padding:12px 14px;border-top:1px solid #263851}.payroll-day-head{margin-bottom:8px}.payroll-line{padding:10px 0;border-top:1px solid rgba(255,255,255,.06)}.payroll-empty{padding:12px 14px}
 .modal{position:fixed;inset:0;z-index:1500;background:rgba(0,0,0,.68);display:flex;align-items:center;justify-content:center;padding:18px}.modal.hidden{display:none!important}.modal-card{width:min(100%,520px);background:#101d30;border:1px solid #2b3b54;border-radius:16px;padding:18px}.modal-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+/* ===== Correctif bouton changement v3.9.1 ===== */
+.change-work-btn{
+  width:100%;
+  margin-top:12px;
+  padding:14px 16px;
+  border-radius:12px;
+  border:1px solid #3a5f90;
+  background:#17345a;
+  color:#fff;
+  font-weight:800;
+}
+.change-work-btn.hidden{display:none!important}

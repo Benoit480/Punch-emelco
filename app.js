@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.9.0';
+const APP_VERSION = '3.9.1';
 
 
 
@@ -237,6 +237,7 @@ function renderPresence(){
   if(on&&currentOpenSession.siteId)$('siteSelect').value=currentOpenSession.siteId;
   $('workTypeSelect').value=(on&&currentOpenSession.workType)?currentOpenSession.workType:'';
   renderMealBreak();
+  show('changeWorkBtn', on && currentProfile?.active!==false);
   applyRoleUI();
 }
 
@@ -1318,6 +1319,13 @@ async function openChangeWorkModal(){
  const sites=q.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false);
  s.innerHTML=sites.map(x=>`<option value="${x.id}" data-name="${escapeHtml(x.name||'')}">${escapeHtml(x.name||'Sans nom')}</option>`).join('');
  if(currentOpenSession.siteId)s.value=currentOpenSession.siteId;
+ const task=$('changeWorkTask');
+ const currentTask=currentOpenSession.workType||currentOpenSession.task||'';
+ if(task && currentTask){
+   const has=[...task.options].some(o=>o.value===currentTask || o.textContent===currentTask);
+   task.value=has?currentTask:'Autres';
+ }
+ if($('changeWorkOtherWrap')) $('changeWorkOtherWrap').classList.toggle('hidden', task?.value!=='Autres');
  show('changeWorkModal',true);
 }
 function closeChangeWorkModal(){show('changeWorkModal',false)}
@@ -1340,5 +1348,5 @@ document.addEventListener('DOMContentLoaded',()=>{
  $('closeChangeWorkBtn')?.addEventListener('click',closeChangeWorkModal);
  $('confirmChangeWorkBtn')?.addEventListener('click',()=>confirmChangeWork().catch(e=>alert(e.message)));
  $('changeWorkTask')?.addEventListener('change',e=>$('changeWorkOtherWrap')?.classList.toggle('hidden',e.target.value!=='Autres'));
- setInterval(refreshChangeWorkButton,1000);
+
 });

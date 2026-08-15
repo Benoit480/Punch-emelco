@@ -1,11 +1,7 @@
-# Punch Emelco v3.8 — Export paie Contremaître
+# Punch Emelco v3.9.1
 
-Dans l'onglet Contremaître :
-- semaine de paie dimanche à samedi;
-- aperçu par employé puis par jour;
-- le contremaître est automatiquement inclus avec les employés qu'il supervise;
-- chantier, tâche effectuée, entrée, sortie, repas et heures payables;
-- statut d'approbation;
-- le contremaître peut approuver ses propres heures;
-- export CSV de son équipe + lui-même;
-- aucune heure supplémentaire.
+Correctif du bouton Changer chantier / tâche.
+
+Le bouton était inséré après la fermeture du `body`, donc il ne pouvait pas apparaître correctement dans l'interface.
+
+Il est maintenant placé directement sous `Repas 30 min` et sa visibilité est pilotée par le même état de présence que les boutons de punch.

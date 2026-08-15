@@ -1,7 +1,11 @@
-# Punch Emelco v3.9.1
+# Punch Emelco v3.9.2
 
-Correctif du bouton Changer chantier / tâche.
+Correction de Mon historique.
 
-Le bouton était inséré après la fermeture du `body`, donc il ne pouvait pas apparaître correctement dans l'interface.
+Un quart qui contient plusieurs changements de chantier/tâche affiche maintenant chaque segment séparément :
+- chantier;
+- tâche;
+- heure de début;
+- heure de fin du segment.
 
-Il est maintenant placé directement sous `Repas 30 min` et sa visibilité est pilotée par le même état de présence que les boutons de punch.
+Le total du quart reste calculé une seule fois sur l'entrée → sortie, moins le repas.

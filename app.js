@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.9.1';
+const APP_VERSION = '3.9.2';
 
 
 
@@ -271,7 +271,25 @@ async function punchOut(){
 async function loadHistory(){
   const snap=await getDocs(query(collection(db,'punches'), where('userId','==',currentUser.uid)));
   myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $('historyBody').innerHTML=myRows.length?myRows.map(r=>`<tr><td>${fmtDate(r.startAt)}</td><td>${escapeHtml(r.siteName||'')}</td><td>${escapeHtml(r.workType||'—')}</td><td>${fmtTime(r.startAt)}</td><td>${fmtTime(r.endAt)}</td><td>${r.endAt?paidHoursBetweenSession(r).toFixed(2)+' h'+(r.mealStartAt?' (repas -'+Math.round(mealDeductionMinutes(r,r.endAt))+' min)':''):'En cours'}</td><td>${r.status==='closed'?`<button class="ghost compact" data-request-edit="${r.id}">Correction</button>`:''}</td></tr>`).join(''):'<tr><td colspan="7">Aucun punch.</td></tr>';
+  $('historyBody').innerHTML = myRows.length ? myRows.map(r=>{
+    const total = r.endAt ? paidHoursBetweenSession(r).toFixed(2)+' h' : 'En cours';
+    const meal = r.mealStartAt ? Math.round(mealDeductionMinutes(r,r.endAt||new Date())) : 0;
+    return `<div class="history-card">
+      <div class="history-card-head">
+        <div>
+          <strong>${fmtDateOnly(r.startAt)}</strong>
+          <div class="muted small">${historySegmentsHtml(r)}</div>
+        </div>
+        <div class="history-total">${total}</div>
+      </div>
+      ${meal ? `<div class="history-meal">🍽️ Repas : ${meal} min</div>` : ''}
+      <div class="history-actions">
+        <button class="secondary compact" data-correct="${r.id}">Correction</button>
+      </div>
+    </div>`;
+  }).join('') : '<p class="muted">Aucun historique.</p>';
+
+  bindHistoryCorrectionButtons();
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
   const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=now.getDay(),startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
   let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=paidHoursBetweenSession(r,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
@@ -1350,3 +1368,34 @@ document.addEventListener('DOMContentLoaded',()=>{
  $('changeWorkTask')?.addEventListener('change',e=>$('changeWorkOtherWrap')?.classList.toggle('hidden',e.target.value!=='Autres'));
 
 });
+
+
+
+// ===== Historique avec segments chantier/tâche v3.9.2 =====
+function historySegmentsHtml(r){
+  const segs = Array.isArray(r.workSegments) ? r.workSegments : [];
+  if(!segs.length){
+    const site = r.siteName || r.site || 'Chantier';
+    const task = r.workType || r.task || r.subSiteName || '—';
+    return `<div class="history-segment">
+      <div class="history-segment-main"><strong>${escapeHtml(site)}</strong><span>${escapeHtml(task)}</span></div>
+      <div class="history-segment-time">${fmtDateTime(r.startAt||r.startTime||r.clockIn)} → ${fmtDateTime(r.endAt||r.endTime||r.clockOut)}</div>
+    </div>`;
+  }
+
+  return segs.map((s,i)=>{
+    const end = s.endAt || (i===segs.length-1 ? (r.endAt||r.endTime||r.clockOut) : null);
+    return `<div class="history-segment">
+      <div class="history-segment-main">
+        <strong>${escapeHtml(s.siteName||'Chantier')}</strong>
+        <span>${escapeHtml(s.task||'—')}</span>
+      </div>
+      <div class="history-segment-time">${fmtDateTime(s.startAt)} → ${fmtDateTime(end)}</div>
+    </div>`;
+  }).join('');
+}
+
+
+function bindHistoryCorrectionButtons(){
+  document.querySelectorAll('[data-correct]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.correct,false));
+}

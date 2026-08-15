@@ -344,3 +344,47 @@ button.delete:active{
   font-weight:800;
 }
 .change-work-btn.hidden{display:none!important}
+
+
+/* ===== Historique segments v3.9.2 ===== */
+.history-card{
+  padding:14px;
+  border:1px solid #263851;
+  border-radius:14px;
+  background:#0d192a;
+  margin-bottom:12px;
+}
+.history-card-head{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+}
+.history-total{
+  font-weight:850;
+  white-space:nowrap;
+}
+.history-segment{
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px dashed rgba(255,255,255,.10);
+}
+.history-segment-main{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.history-segment-main span{
+  color:#9fb0c8;
+}
+.history-segment-time{
+  color:#9fb0c8;
+  margin-top:3px;
+}
+.history-meal{
+  margin-top:10px;
+  color:#d6b45d;
+}
+.history-actions{
+  margin-top:10px;
+}

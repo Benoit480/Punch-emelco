@@ -1,11 +1,6 @@
-# Punch Emelco v3.9.2
+# Punch Emelco v3.9.3
 
-Correction de Mon historique.
-
-Un quart qui contient plusieurs changements de chantier/tâche affiche maintenant chaque segment séparément :
-- chantier;
-- tâche;
-- heure de début;
-- heure de fin du segment.
-
-Le total du quart reste calculé une seule fois sur l'entrée → sortie, moins le repas.
+Correctif :
+- ajout de la fonction `fmtDateOnly` manquante;
+- Mon historique peut maintenant afficher les segments chantier/tâche sans erreur;
+- aucun changement au calcul des heures.

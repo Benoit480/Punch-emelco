@@ -1,3 +1,15 @@
+
+function fmtDateOnly(value){
+  const d = toDate(value);
+  if(!d) return '—';
+  return d.toLocaleDateString('fr-CA',{
+    weekday:'short',
+    day:'numeric',
+    month:'short',
+    year:'numeric'
+  });
+}
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
@@ -13,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.9.2';
+const APP_VERSION = '3.9.3';
 
 
 

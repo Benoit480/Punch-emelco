@@ -1,7 +1,9 @@
-# Punch Emelco v3.10.5
+# Punch Emelco v3.10.6
 
-Correctif du chargement des employés.
+Correctif renforcé du chargement des employés.
 
-- La liste Employés de l'administration s'affiche de nouveau.
-- La sélection d'employés dans l'onglet Contremaître s'affiche de nouveau.
-- Aucun changement aux punchs, feuilles de temps, approbations ou exports CSV.
+- Correction de l'erreur `userMap` dans Feuilles de temps.
+- `loadAdmin()` est maintenant séparé en blocs : une erreur de feuilles de temps ne bloque plus Employés.
+- La liste Employés admin se charge indépendamment.
+- Le sélecteur d'équipe Contremaître se charge indépendamment.
+- En cas d'erreur Firebase, un message précis s'affiche au lieu de rester sur « Chargement… ».

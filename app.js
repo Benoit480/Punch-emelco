@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.10.5';
+const APP_VERSION = '3.10.6';
 
 
 
@@ -329,7 +329,7 @@ function renderGroupedTimesheets(allRows){
   if($('payWeekLabel')) $('payWeekLabel').textContent=payWeekOffset===0?'Semaine en cours':payWeekOffset===-1?'Semaine précédente':'Semaine sélectionnée';
   if($('payWeekDates')) $('payWeekDates').textContent=`${shortFrDate(start)} au ${shortFrDate(new Date(end.getTime()-86400000))}`;
   const people=new Map();
-  rows.forEach(r=>{const key=r.userId||r.userEmail||r.userName||'inconnu';if(!people.has(key))people.set(key,{name:currentEmployeeName(userMap,r.userId,r.userName,r.userEmail),email:r.userEmail||'',rows:[]});people.get(key).rows.push(r);});
+  rows.forEach(r=>{const key=r.userId||r.userEmail||r.userName||'inconnu';if(!people.has(key))people.set(key,{name:(r.userName||r.userEmail||'Employé'),email:r.userEmail||'',rows:[]});people.get(key).rows.push(r);});
   if(!people.size){box.innerHTML='<p class="muted empty-week">Aucune heure pour cette semaine.</p>';return;}
   box.innerHTML=[...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'fr')).map(person=>{
     const days=new Map(); let weekTotal=0;
@@ -345,18 +345,43 @@ function renderGroupedTimesheets(allRows){
 function changePayWeek(delta){payWeekOffset+=delta;renderGroupedTimesheets(window.__adminRows||[]);document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));}
 
 async function loadAdmin(){
-  if(!canManageTime())return;
-  const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
-  const present=openSnap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
-  $('presentList').innerHTML=present.length?present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join(''):'<p class="muted">Personne n’est punché présentement.</p>';
+  if(!canManageTime()) return;
 
-  const snap=await getDocs(collection(db,'punches'));
-  const rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
-  window.__adminRows=rows;
-  renderGroupedTimesheets(rows);
-  document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
-  if(canManageUsers()) await loadEmployees(); await loadCorrections(); setTimeout(()=>{enhanceSiteDeleteButtons();enhanceEmployeeDeleteButtons();
-  enhanceEmployeeEditButtons();},0);
+  try{
+    const openSnap=await getDocs(query(collection(db,'punches'),where('status','==','open')));
+    const present=openSnap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
+    $('presentList').innerHTML=present.length
+      ? present.map(r=>`<div class="list-item"><div><strong>${escapeHtml(r.userName||r.userEmail)}</strong><br><small>${escapeHtml(r.siteName||'')} • ${escapeHtml(r.workType||'Type non précisé')} • depuis ${fmtTime(r.startAt)}</small></div><span class="dot on"></span></div>`).join('')
+      : '<p class="muted">Personne n’est punché présentement.</p>';
+  }catch(e){
+    console.warn('Présents maintenant:',e);
+  }
+
+  try{
+    const snap=await getDocs(collection(db,'punches'));
+    const rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(foremanCanSeeRecord);
+    window.__adminRows=rows;
+    renderGroupedTimesheets(rows);
+    document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));
+  }catch(e){
+    console.warn('Feuilles de temps:',e);
+  }
+
+  if(canManageUsers()){
+    try{
+      await loadEmployees();
+      setTimeout(()=>{
+        try{enhanceEmployeeDeleteButtons();}catch(e){}
+        try{enhanceEmployeeEditButtons();}catch(e){}
+      },0);
+    }catch(e){
+      console.error('Chargement employés:',e);
+      if($('employeeList')) $('employeeList').innerHTML='<p class="muted">Erreur de chargement des employés : '+escapeHtml(e.message||String(e))+'</p>';
+    }
+  }
+
+  try{ await loadCorrections(); }catch(e){ console.warn('Corrections:',e); }
+  try{ enhanceSiteDeleteButtons(); }catch(e){}
 }
 
 async function loadEmployees(){
@@ -819,43 +844,50 @@ async function loadForemanAssignment(){
 }
 
 async function populateForemanAssignmentUI(){
-  const siteSelect = $('foremanSiteSelect');
-  const picker = $('foremanEmployeePicker');
+  const siteSelect=$('foremanSiteSelect');
+  const picker=$('foremanEmployeePicker');
   if(!siteSelect || !picker) return;
 
-  const siteSnap = await getDocs(collection(db,'sites'));
-  const sites = siteSnap.docs
-    .map(d=>({id:d.id,...d.data()}))
-    .filter(s=>s.active!==false)
-    .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  try{
+    const [siteSnap,usersSnap]=await Promise.all([
+      getDocs(collection(db,'sites')),
+      getDocs(collection(db,'users'))
+    ]);
 
-  siteSelect.innerHTML =
-    '<option value="">Choisir un chantier…</option>' +
-    sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name||'Sans nom')}</option>`).join('');
-  siteSelect.value = foremanAssignment.siteId || '';
+    const sites=siteSnap.docs
+      .map(d=>({id:d.id,...d.data()}))
+      .filter(s=>s.active!==false)
+      .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 
-  const usersSnap = await getDocs(collection(db,'users'));
-  const users = usersSnap.docs
-    .map(d=>({id:d.id,...d.data()}))
-    .filter(u=>u.deleted!==true && u.active!==false && normalizeRole(u.role)==='employee')
-    .sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
+    siteSelect.innerHTML='<option value="">Choisir un chantier…</option>'+
+      sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name||'Sans nom')}</option>`).join('');
+    siteSelect.value=foremanAssignment.siteId||'';
 
-  const selected = new Set(foremanAssignment.employeeIds || []);
+    const users=usersSnap.docs
+      .map(d=>({id:d.id,...d.data()}))
+      .filter(u=>u.deleted!==true && u.active!==false && normalizeRole(u.role)==='employee')
+      .sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
 
-  picker.innerHTML = users.length ? users.map(u=>`
-    <label class="foreman-employee-choice">
-      <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
-      <span>
-        <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
-        <small>${escapeHtml(u.email||'')}</small>
-      </span>
-    </label>
-  `).join('') : '<p class="muted">Aucun employé actif.</p>';
+    const selected=new Set(foremanAssignment.employeeIds||[]);
 
-  picker.querySelectorAll('[data-foreman-employee]').forEach(cb=>{
-    cb.addEventListener('change', updateForemanEmployeeCount);
-  });
-  updateForemanEmployeeCount();
+    picker.innerHTML=users.length ? users.map(u=>`
+      <label class="foreman-employee-choice">
+        <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
+        <span>
+          <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
+          <small>${escapeHtml(u.email||'')}</small>
+        </span>
+      </label>
+    `).join('') : '<p class="muted">Aucun employé actif.</p>';
+
+    picker.querySelectorAll('[data-foreman-employee]').forEach(cb=>{
+      cb.addEventListener('change',updateForemanEmployeeCount);
+    });
+    updateForemanEmployeeCount();
+  }catch(e){
+    console.error('Chargement équipe contremaître:',e);
+    picker.innerHTML='<p class="muted">Erreur de chargement des employés : '+escapeHtml(e.message||String(e))+'</p>';
+  }
 }
 
 function updateForemanEmployeeCount(){
@@ -1132,6 +1164,7 @@ async function switchRoleTab(tab){
   try{
     if(tab === 'foreman' && canManageTime()){
       await loadForemanAssignment();
+      try{ await populateForemanAssignmentUI(); }catch(e){ console.warn(e); }
       await loadAdmin();
       if(typeof v3approvals === 'function') await v3approvals();
     }

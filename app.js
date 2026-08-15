@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.10.0';
+const APP_VERSION = '3.10.1';
 
 
 
@@ -360,7 +360,7 @@ async function loadAdmin(){
 
 async function loadEmployees(){
   const snap=await getDocs(collection(db,'users')); const users=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.deleted!==true).sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
-  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(u.name||u.email||'Employé')}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
+  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button><button class="secondary compact edit-employee-btn" data-edit-employee="${u.id}">Modifier</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(u.name||u.email||'Employé')}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
   document.querySelectorAll('[data-role-user]').forEach(s=>s.onchange=()=>setUserRole(s.dataset.roleUser,s.value));
   document.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>setUserActive(b.dataset.userToggle,b.dataset.active!=='true'));
 }
@@ -1227,9 +1227,9 @@ function enhanceSiteDeleteButtons(){
 function enhanceEmployeeDeleteButtons(){
   document.querySelectorAll('#employeeList .list-item').forEach(item=>{
     if(item.querySelector('[data-delete-employee]')) return;
-    const roleSelect = item.querySelector('[data-user-role]');
-    const activeBtn = item.querySelector('[data-user-active]');
-    const uid = roleSelect?.dataset.userRole || activeBtn?.dataset.userActive;
+    const roleSelect = item.querySelector('[data-role-user]');
+    const activeBtn = item.querySelector('[data-user-toggle]');
+    const uid = roleSelect?.dataset.roleUser || activeBtn?.dataset.userToggle;
     if(!uid || uid === currentUser?.uid) return;
 
     const strong = item.querySelector('strong');
@@ -1484,9 +1484,9 @@ function enhanceEmployeeEditButtons(){
   document.querySelectorAll('#employeeList .list-item').forEach(item=>{
     if(item.querySelector('[data-edit-employee]')) return;
 
-    const roleSelect = item.querySelector('[data-user-role]');
-    const activeBtn = item.querySelector('[data-user-active]');
-    const uid = roleSelect?.dataset.userRole || activeBtn?.dataset.userActive;
+    const roleSelect = item.querySelector('[data-role-user]');
+    const activeBtn = item.querySelector('[data-user-toggle]');
+    const uid = roleSelect?.dataset.roleUser || activeBtn?.dataset.userToggle;
     if(!uid) return;
 
     const actions = roleSelect?.parentElement || activeBtn?.parentElement || item;

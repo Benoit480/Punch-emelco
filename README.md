@@ -1,13 +1,9 @@
-# Punch Emelco v3.10 — Modifier un employé
+# Punch Emelco v3.10.2
 
-Ajout d'un bouton **Modifier** dans la liste des employés.
+Correctif du nom dans les feuilles de temps.
 
-L'admin peut modifier :
-- le nom complet;
-- le rôle : Employé / Contremaître / Admin;
-- le statut actif/inactif.
+Lorsqu'un admin modifie le nom d'un employé, les sections de semaine/paie
+utilisent maintenant le nom actuel dans la collection `users` plutôt que
+le vieux `userName` enregistré dans les anciens punchs.
 
-Le courriel est affiché en lecture seule afin de ne pas désynchroniser
-le profil Firestore et le compte Firebase Authentication.
-
-Le compte propriétaire `benoit2568@hotmail.com` reste toujours Admin et actif.
+Les anciennes heures restent intactes; seul le nom affiché est synchronisé.

@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.10.1';
+const APP_VERSION = '3.10.2';
 
 
 
@@ -261,6 +261,7 @@ async function punchIn(){
     const site=allSites.find(s=>s.id===siteId);
     await addDoc(collection(db,'punches'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
     $('gpsStatus').textContent=`Entrée enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
+  setTimeout(()=>refreshVisibleTimesheetNames(),100);
   }catch(e){$('gpsStatus').textContent=e.message;$('punchInBtn').disabled=false}
 }
 async function punchOut(){
@@ -328,7 +329,7 @@ function renderGroupedTimesheets(allRows){
   if($('payWeekLabel')) $('payWeekLabel').textContent=payWeekOffset===0?'Semaine en cours':payWeekOffset===-1?'Semaine précédente':'Semaine sélectionnée';
   if($('payWeekDates')) $('payWeekDates').textContent=`${shortFrDate(start)} au ${shortFrDate(new Date(end.getTime()-86400000))}`;
   const people=new Map();
-  rows.forEach(r=>{const key=r.userId||r.userEmail||r.userName||'inconnu';if(!people.has(key))people.set(key,{name:r.userName||r.userEmail||'Employé',email:r.userEmail||'',rows:[]});people.get(key).rows.push(r);});
+  rows.forEach(r=>{const key=r.userId||r.userEmail||r.userName||'inconnu';if(!people.has(key))people.set(key,{name:currentEmployeeName(userMap,r.userId,r.userName,r.userEmail),email:r.userEmail||'',rows:[]});people.get(key).rows.push(r);});
   if(!people.size){box.innerHTML='<p class="muted empty-week">Aucune heure pour cette semaine.</p>';return;}
   box.innerHTML=[...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'fr')).map(person=>{
     const days=new Map(); let weekTotal=0;
@@ -360,7 +361,7 @@ async function loadAdmin(){
 
 async function loadEmployees(){
   const snap=await getDocs(collection(db,'users')); const users=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.deleted!==true).sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
-  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button><button class="secondary compact edit-employee-btn" data-edit-employee="${u.id}">Modifier</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(u.name||u.email||'Employé')}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
+  $('employeeList').innerHTML=users.map(u=>`<div class="list-item employee-row"><div><strong>${escapeHtml(u.name||u.email||'Sans nom')}</strong><br><small>${escapeHtml(u.email||'')} • ${u.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><select class="mini-select" data-role-user="${u.id}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}><option value="employee" ${normalizeRole(u.role)==='employee'?'selected':''}>Employé</option><option value="foreman" ${normalizeRole(u.role)==='foreman'?'selected':''}>Contremaître</option><option value="admin" ${normalizeRole(u.role)==='admin'?'selected':''}>Admin</option></select><button class="${u.active===false?'success':'danger'} compact" data-user-toggle="${u.id}" data-active="${u.active!==false}" ${u.email?.toLowerCase()===OWNER_EMAIL?'disabled':''}>${u.active===false?'Activer':'Désactiver'}</button><button class="secondary compact edit-employee-btn" data-edit-employee="${u.id}">Modifier</button>${u.email?.toLowerCase()===OWNER_EMAIL?'':`<button class="delete compact" data-delete-employee="${u.id}" data-employee-name="${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}" data-employee-email="${escapeHtml(u.email||'')}">Supprimer</button>`}</div></div>`).join('');
   document.querySelectorAll('[data-role-user]').forEach(s=>s.onchange=()=>setUserRole(s.dataset.roleUser,s.value));
   document.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>setUserActive(b.dataset.userToggle,b.dataset.active!=='true'));
 }
@@ -667,10 +668,10 @@ function v3endValue(p){ return p.endAt||p.endTime||p.clockOut; }
 
 async function v3approvals(){
   const box=v3el("approvalList"); if(!box) return;
-  const q=await getDocs(collection(db,"punches"));
+  const [q,userMap]=await Promise.all([getDocs(collection(db,"punches")),currentUserDirectory()]);
   const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true).filter(foremanCanSeeRecord).sort((a,b)=>v3toMillis(v3startValue(a))-v3toMillis(v3startValue(b)));
   const groups=new Map();
-  rows.forEach(p=>{const key=p.userId||p.userEmail||p.userName||'x';if(!groups.has(key))groups.set(key,{name:p.userName||p.userEmail||'Employé',rows:[]});groups.get(key).rows.push(p);});
+  rows.forEach(p=>{const key=p.userId||p.userEmail||p.userName||'x';if(!groups.has(key))groups.set(key,{name:currentEmployeeName(userMap,p.userId,p.userName,p.userEmail),rows:[]});groups.get(key).rows.push(p);});
   box.innerHTML=groups.size?[...groups.values()].map(g=>`<div class="approval-employee"><div class="approval-employee-head"><strong>${escapeHtml(g.name)}</strong><span>${g.rows.reduce((n,p)=>n+v3hours(p),0).toFixed(2)} h à approuver</span></div>${g.rows.map(p=>{const d=new Date(v3toMillis(v3startValue(p)));return `<div class="approval-item"><div><strong>${longFrDay(d)}</strong><span>${escapeHtml(p.siteName||p.site||'Chantier')} · ${fmtTime(v3startValue(p))} → ${fmtTime(v3endValue(p))}</span></div><strong>${v3hours(p).toFixed(2)} h</strong><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`}).join('')}</div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
   box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});await v3approvals(); await v3reports();});
 }
@@ -845,7 +846,7 @@ async function populateForemanAssignmentUI(){
     <label class="foreman-employee-choice">
       <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
       <span>
-        <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
+        <strong>${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}</strong>
         <small>${escapeHtml(u.email||'')}</small>
       </span>
     </label>
@@ -892,6 +893,7 @@ async function saveForemanAssignment(){
   }
 
   await loadAdmin();
+      setTimeout(()=>refreshVisibleTimesheetNames(),100);
   if(typeof v3approvals === 'function') await v3approvals();
       if(typeof loadForemanPayrollPreview === 'function') await loadForemanPayrollPreview();
 }
@@ -1308,7 +1310,7 @@ async function loadForemanPayrollPreview(){
       const d=new Date(k+'T12:00:00'),dt=rr.reduce((s,p)=>s+payrollHours(p),0);
       return `<div class="payroll-day"><div class="payroll-day-head"><strong>${d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'short'})}</strong><span>${dt.toFixed(2)} h</span></div>${rr.map(p=>`<div class="payroll-line"><strong>${escapeHtml(p.siteName||p.site||'Chantier')}</strong><div class="muted">Tâche : ${escapeHtml(payrollTaskLabel(p))}</div><div class="muted">${fmtDateTime(p.startAt||p.startTime||p.clockIn)} → ${fmtDateTime(p.endAt||p.endTime||p.clockOut)}</div><div class="muted">Repas : ${p.mealStartAt?30:0} min · ${payrollStatus(p)}</div></div>`).join('')}</div>`
     }).join('');
-    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(u.name||u.email||'Employé')}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
+    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(currentEmployeeName(users,uid,u.name,u.email))}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
   }).join('');
 }
 
@@ -1328,7 +1330,7 @@ async function exportForemanPayrollCsv(){
   const data=[['Employé','Date','Chantier','Tâche effectuée','Entrée','Sortie','Repas (min)','Heures payables','Statut']];
   rows.sort((a,b)=>(users.get(a.userId)?.name||'').localeCompare(users.get(b.userId)?.name||'')||payrollRecordDate(a)-payrollRecordDate(b)).forEach(p=>{
     const u=users.get(p.userId)||{},a=payrollRecordDate(p),b=toDate(p.endAt||p.endTime||p.clockOut);
-    data.push([u.name||u.email||'',a?.toLocaleDateString('fr-CA')||'',p.siteName||p.site||'',payrollTaskLabel(p),a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',p.mealStartAt?30:0,payrollHours(p).toFixed(2),payrollStatus(p)]);
+    data.push([currentEmployeeName(users,p.userId,u.name,u.email),a?.toLocaleDateString('fr-CA')||'',p.siteName||p.site||'',payrollTaskLabel(p),a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',p.mealStartAt?30:0,payrollHours(p).toFixed(2),payrollStatus(p)]);
   });
   const csv=data.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -1511,3 +1513,47 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('closeEditEmployeeBtn')?.addEventListener('click',closeEditEmployeeModal);
   $('saveEditEmployeeBtn')?.addEventListener('click',()=>saveEditEmployee().catch(e=>alert(e.message)));
 });
+
+
+
+// ===== Nom employé actuel dans les feuilles de temps v3.10.2 =====
+async function currentUserDirectory(){
+  const snap = await getDocs(collection(db,'users'));
+  return new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+}
+
+function currentEmployeeName(userMap, userId, fallbackName='', fallbackEmail=''){
+  const u = userMap?.get(userId);
+  return u?.name || u?.email || fallbackName || fallbackEmail || 'Employé';
+}
+
+
+
+async function refreshVisibleTimesheetNames(){
+  try{
+    const userMap = await currentUserDirectory();
+
+    // Cards generated in Feuilles de temps.
+    document.querySelectorAll('[data-timesheet-user-id]').forEach(el=>{
+      const uid = el.dataset.timesheetUserId;
+      const u = userMap.get(uid);
+      const nameEl = el.querySelector('[data-timesheet-user-name]');
+      if(u && nameEl) nameEl.textContent = u.name || u.email || 'Employé';
+    });
+
+    // Fallback for existing cards without data attributes:
+    // match displayed email to the current user profile, then replace the nearest heading.
+    document.querySelectorAll('.payroll-employee, .timesheet-employee, .employee-week-card').forEach(card=>{
+      const txt = card.textContent || '';
+      for(const [uid,u] of userMap){
+        if(u.email && txt.includes(u.email)){
+          const head = card.querySelector('h3,h4,.employee-name,.payroll-employee-head strong,strong');
+          if(head) head.textContent = u.name || u.email;
+          break;
+        }
+      }
+    });
+  }catch(e){
+    console.warn('Mise à jour noms feuilles de temps:',e);
+  }
+}

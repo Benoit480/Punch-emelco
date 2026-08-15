@@ -1327,13 +1327,56 @@ async function exportForemanPayrollCsv(){
   const [ps,us]=await Promise.all([getDocs(collection(db,'punches')),getDocs(collection(db,'users'))]);
   const users=new Map(us.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
   const rows=ps.docs.map(d=>({id:d.id,...d.data()})).filter(p=>ids.has(p.userId)&&payrollInWeek(p)&&(p.endAt||p.endTime||p.clockOut));
-  const data=[['Employé','Date','Chantier','Tâche effectuée','Entrée','Sortie','Repas (min)','Heures payables','Statut']];
-  rows.sort((a,b)=>(users.get(a.userId)?.name||'').localeCompare(users.get(b.userId)?.name||'')||payrollRecordDate(a)-payrollRecordDate(b)).forEach(p=>{
-    const u=users.get(p.userId)||{},a=payrollRecordDate(p),b=toDate(p.endAt||p.endTime||p.clockOut);
-    data.push([currentEmployeeName(users,p.userId,u.name,u.email),a?.toLocaleDateString('fr-CA')||'',p.siteName||p.site||'',payrollTaskLabel(p),a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',p.mealStartAt?30:0,payrollHours(p).toFixed(2),payrollStatus(p)]);
+
+  // Regrouper les heures par employé pour rendre le CSV plus lisible dans Excel/Numbers.
+  const byEmployee=new Map();
+  rows.forEach(p=>{
+    if(!byEmployee.has(p.userId)) byEmployee.set(p.userId,[]);
+    byEmployee.get(p.userId).push(p);
   });
-  const csv=data.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+
+  const employeeIds=[...byEmployee.keys()].sort((a,b)=>{
+    const ua=users.get(a)||{},ub=users.get(b)||{};
+    const na=currentEmployeeName(users,a,ua.name,ua.email);
+    const nb=currentEmployeeName(users,b,ub.name,ub.email);
+    return na.localeCompare(nb,'fr',{sensitivity:'base'});
+  });
+
+  const data=[];
+  data.push(['SEMAINE DE PAIE',`${start.toLocaleDateString('fr-CA')} au ${end.toLocaleDateString('fr-CA')}`]);
+  data.push([]);
+
+  employeeIds.forEach((uid,index)=>{
+    const u=users.get(uid)||{};
+    const name=currentEmployeeName(users,uid,u.name,u.email);
+    const employeeRows=byEmployee.get(uid).sort((a,b)=>payrollRecordDate(a)-payrollRecordDate(b));
+    const total=employeeRows.reduce((sum,p)=>sum+payrollHours(p),0);
+
+    data.push(['EMPLOYÉ',name]);
+    if(u.email) data.push(['COURRIEL',u.email]);
+    data.push(['Date','Chantier','Tâche effectuée','Entrée','Sortie','Repas (min)','Heures payables','Statut']);
+
+    employeeRows.forEach(p=>{
+      const a=payrollRecordDate(p),b=toDate(p.endAt||p.endTime||p.clockOut);
+      data.push([
+        a?.toLocaleDateString('fr-CA')||'',
+        p.siteName||p.site||'',
+        payrollTaskLabel(p),
+        a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
+        b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
+        p.mealStartAt?30:0,
+        payrollHours(p).toFixed(2),
+        payrollStatus(p)
+      ]);
+    });
+
+    data.push(['TOTAL SEMAINE','','','','','',total.toFixed(2),'']);
+    // Deux lignes vides entre chaque employé.
+    if(index<employeeIds.length-1){data.push([]);data.push([]);}
+  });
+
+  const csv=data.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob(['\\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=`paie_${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);
 }
 

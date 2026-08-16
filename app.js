@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.0-test';
+const APP_VERSION = '3.11.1-test';
 
 
 
@@ -164,9 +164,9 @@ function updateSyncStatus(custom=''){
  const el=$('syncStatus');if(!el)return;
  const pending=getOfflineQueue().filter(x=>!offlineUid()||x.userId===offlineUid()).length;
  if(custom){el.textContent=custom;return}
- if(!navigator.onLine){el.className='sync-status offline';el.textContent=`📴 Hors connexion${pending?` • ${pending} en attente`:''}`}
- else if(pending){el.className='sync-status pending';el.textContent=`🟠 ${pending} action${pending>1?'s':''} à synchroniser`}
- else{el.className='sync-status online';el.textContent='🟢 Synchronisé'}
+ if(!navigator.onLine){el.className='sync-status offline';el.textContent=`📴 Hors ligne${pending?` • ${pending}`:''}`}
+ else if(pending){el.className='sync-status pending';el.textContent=`🟠 ${pending} en attente`}
+ else{el.className='sync-status online';el.textContent='● Synchronisé'}
 }
 async function syncOfflineQueue(){
  if(!navigator.onLine||!currentUser){updateSyncStatus();return}

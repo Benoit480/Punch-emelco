@@ -404,3 +404,8 @@ button.delete:active{
   width:20px;
   height:20px;
 }
+
+/* ===== Mode hors connexion v3.11 ===== */
+.sync-status{padding:7px 10px;border-radius:999px;font-size:.78rem;font-weight:800;white-space:nowrap;border:1px solid rgba(255,255,255,.12)}
+.sync-status.online{background:#102d22;color:#8ef0bb}.sync-status.pending{background:#3a2b0d;color:#ffd575}.sync-status.offline{background:#3a1820;color:#ff9cab}
+@media(max-width:640px){.sync-status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:1190;text-align:center;box-shadow:0 8px 25px rgba(0,0,0,.28)}}

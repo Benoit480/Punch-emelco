@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.10.6';
+const APP_VERSION = '3.11.0-test';
 
 
 
@@ -118,6 +118,74 @@ const fmtDate=t=>t?toDate(t).toLocaleDateString('fr-CA'):'—';
 const fmtDateTime=t=>t?toDate(t).toLocaleString('fr-CA',{dateStyle:'short',timeStyle:'short'}):'—';
 const hoursBetween=(a,b)=>{if(!a||!b)return 0;return Math.max(0,(toDate(b)-toDate(a))/36e5)};
 
+
+// ===== Mode hors connexion v3.11 TEST =====
+const OFFLINE_QUEUE_KEY='punchTravail.offlineQueue.v311';
+const OFFLINE_PROFILE_PREFIX='punchTravail.profile.';
+const OFFLINE_SITES_KEY='punchTravail.sites.v311';
+const OFFLINE_SESSION_PREFIX='punchTravail.openSession.';
+const OFFLINE_HISTORY_PREFIX='punchTravail.history.';
+
+function offlineUid(){return currentUser?.uid||auth.currentUser?.uid||''}
+function localKey(prefix){return prefix+offlineUid()}
+function safeJsonParse(raw,fallback){try{return raw?JSON.parse(raw):fallback}catch(e){return fallback}}
+function uuidv4(){return globalThis.crypto?.randomUUID?globalThis.crypto.randomUUID():'off-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}
+function localTs(){return Timestamp.fromDate(new Date())}
+function serializeForQueue(v){
+ if(v==null)return v;
+ if(v?.toDate&&typeof v.toDate==='function')return{__ts:v.toDate().toISOString()};
+ if(v instanceof Date)return{__ts:v.toISOString()};
+ if(Array.isArray(v))return v.map(serializeForQueue);
+ if(typeof v==='object'){const o={};for(const[k,x]of Object.entries(v))o[k]=serializeForQueue(x);return o}
+ return v;
+}
+function restoreFromQueue(v){
+ if(v==null)return v;
+ if(Array.isArray(v))return v.map(restoreFromQueue);
+ if(typeof v==='object'){
+  if(v.__ts)return Timestamp.fromDate(new Date(v.__ts));
+  const o={};for(const[k,x]of Object.entries(v))o[k]=restoreFromQueue(x);return o;
+ }
+ return v;
+}
+function getOfflineQueue(){return safeJsonParse(localStorage.getItem(OFFLINE_QUEUE_KEY),[])}
+function setOfflineQueue(q){localStorage.setItem(OFFLINE_QUEUE_KEY,JSON.stringify(q));updateSyncStatus()}
+function enqueueOffline(type,sessionId,payload){const q=getOfflineQueue();q.push({id:uuidv4(),type,sessionId,payload:serializeForQueue(payload),userId:offlineUid()});setOfflineQueue(q)}
+function cacheProfile(p){if(offlineUid()&&p)localStorage.setItem(localKey(OFFLINE_PROFILE_PREFIX),JSON.stringify(p))}
+function cachedProfile(){return safeJsonParse(localStorage.getItem(localKey(OFFLINE_PROFILE_PREFIX)),null)}
+function cacheSites(s){localStorage.setItem(OFFLINE_SITES_KEY,JSON.stringify(s||[]))}
+function cachedSites(){return safeJsonParse(localStorage.getItem(OFFLINE_SITES_KEY),[])}
+function cacheOpenSession(s){if(!offlineUid())return;if(s)localStorage.setItem(localKey(OFFLINE_SESSION_PREFIX),JSON.stringify(serializeForQueue(s)));else localStorage.removeItem(localKey(OFFLINE_SESSION_PREFIX))}
+function cachedOpenSession(){return restoreFromQueue(safeJsonParse(localStorage.getItem(localKey(OFFLINE_SESSION_PREFIX)),null))}
+function cacheHistory(rows){if(offlineUid())localStorage.setItem(localKey(OFFLINE_HISTORY_PREFIX),JSON.stringify(serializeForQueue(rows||[])))}
+function cachedHistory(){return restoreFromQueue(safeJsonParse(localStorage.getItem(localKey(OFFLINE_HISTORY_PREFIX)),[]))}
+function isOfflineNow(){return navigator.onLine===false}
+function updateSyncStatus(custom=''){
+ const el=$('syncStatus');if(!el)return;
+ const pending=getOfflineQueue().filter(x=>!offlineUid()||x.userId===offlineUid()).length;
+ if(custom){el.textContent=custom;return}
+ if(!navigator.onLine){el.className='sync-status offline';el.textContent=`📴 Hors connexion${pending?` • ${pending} en attente`:''}`}
+ else if(pending){el.className='sync-status pending';el.textContent=`🟠 ${pending} action${pending>1?'s':''} à synchroniser`}
+ else{el.className='sync-status online';el.textContent='🟢 Synchronisé'}
+}
+async function syncOfflineQueue(){
+ if(!navigator.onLine||!currentUser){updateSyncStatus();return}
+ let q=getOfflineQueue(),mine=q.filter(x=>x.userId===currentUser.uid);
+ if(!mine.length){updateSyncStatus();return}
+ updateSyncStatus('🔄 Synchronisation…');
+ for(const evt of mine){
+  try{
+   await setDoc(doc(db,'punches',evt.sessionId),restoreFromQueue(evt.payload),{merge:true});
+   q=q.filter(x=>x.id!==evt.id);localStorage.setItem(OFFLINE_QUEUE_KEY,JSON.stringify(q));
+  }catch(e){console.warn('Synchronisation différée:',e);updateSyncStatus();return}
+ }
+ updateSyncStatus();try{await refreshAll()}catch(e){console.warn(e)}
+}
+window.addEventListener('online',()=>{updateSyncStatus();setTimeout(syncOfflineQueue,300)});
+window.addEventListener('offline',updateSyncStatus);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine)syncOfflineQueue()});
+setInterval(()=>{if(navigator.onLine&&getOfflineQueue().length)syncOfflineQueue()},30000);
+
 const MEAL_MINUTES=30;
 let mealTimer=null;
 
@@ -135,17 +203,11 @@ function paidHoursBetweenSession(r,endOverride=null){
   return Math.max(0,hoursBetween(r.startAt,end)-mealDeductionMinutes(r,end)/60);
 }
 async function finalizeMealIfNeeded(){
-  if(!currentOpenSession?.mealStartAt || currentOpenSession?.mealEndAt)return;
-  const elapsed=(Date.now()-toDate(currentOpenSession.mealStartAt).getTime())/60000;
-  if(elapsed>=MEAL_MINUTES){
-    await updateDoc(doc(db,'punches',currentOpenSession.id),{
-      mealEndAt:Timestamp.fromDate(new Date(toDate(currentOpenSession.mealStartAt).getTime()+MEAL_MINUTES*60000)),
-      mealDurationMinutes:MEAL_MINUTES,
-      updatedAt:serverTimestamp()
-    });
-    currentOpenSession.mealEndAt=Timestamp.fromDate(new Date(toDate(currentOpenSession.mealStartAt).getTime()+MEAL_MINUTES*60000));
-    currentOpenSession.mealDurationMinutes=MEAL_MINUTES;
-  }
+ if(!currentOpenSession?.mealStartAt||currentOpenSession?.mealEndAt)return;
+ const start=toDate(currentOpenSession.mealStartAt),elapsed=(Date.now()-start.getTime())/60000;if(elapsed<MEAL_MINUTES)return;
+ const end=Timestamp.fromDate(new Date(start.getTime()+MEAL_MINUTES*60000)),patch={mealEndAt:end,mealDurationMinutes:MEAL_MINUTES,updatedAt:localTs()};
+ if(isOfflineNow()){enqueueOffline('mealEnd',currentOpenSession.id,patch);currentOpenSession={...currentOpenSession,...patch};cacheOpenSession(currentOpenSession);return}
+ await updateDoc(doc(db,'punches',currentOpenSession.id),{mealEndAt:end,mealDurationMinutes:MEAL_MINUTES,updatedAt:serverTimestamp()});currentOpenSession={...currentOpenSession,...patch};cacheOpenSession(currentOpenSession);
 }
 function renderMealBreak(){
   const wrap=$('mealBreakWrap'),btn=$('mealBreakBtn'),status=$('mealBreakStatus');
@@ -175,19 +237,13 @@ function renderMealBreak(){
   update();mealTimer=setInterval(update,1000);
 }
 async function startMealBreak(){
-  try{
-    if(!currentOpenSession)throw new Error('Tu dois être punché au travail.');
-    if(currentOpenSession.mealStartAt)throw new Error('Le repas de 30 minutes a déjà été utilisé pour ce quart.');
-    await updateDoc(doc(db,'punches',currentOpenSession.id),{
-      mealStartAt:serverTimestamp(),
-      mealEndAt:null,
-      mealDurationMinutes:0,
-      mealUsed:true,
-      updatedAt:serverTimestamp()
-    });
-    await findOpenSession();
-    renderMealBreak();
-  }catch(e){alert(e.message)}
+ try{
+  if(!currentOpenSession)throw new Error('Tu dois être punché au travail.');
+  if(currentOpenSession.mealStartAt)throw new Error('Le repas de 30 minutes a déjà été utilisé pour ce quart.');
+  const at=localTs(),patch={mealStartAt:at,mealEndAt:null,mealDurationMinutes:0,mealUsed:true,updatedAt:at};
+  if(isOfflineNow()){enqueueOffline('mealStart',currentOpenSession.id,patch);currentOpenSession={...currentOpenSession,...patch};cacheOpenSession(currentOpenSession);renderMealBreak();return}
+  await updateDoc(doc(db,'punches',currentOpenSession.id),{mealStartAt:serverTimestamp(),mealEndAt:null,mealDurationMinutes:0,mealUsed:true,updatedAt:serverTimestamp()});await findOpenSession();renderMealBreak();
+ }catch(e){alert(e.message)}
 }
 
 const show=(id,on=true)=>$(id).classList.toggle('hidden',!on);
@@ -203,7 +259,11 @@ async function getPosition(){
   ));
 }
 
-async function loadProfile(uid){const s=await getDoc(doc(db,'users',uid));return s.exists()?s.data():null}
+async function loadProfile(uid){
+ if(isOfflineNow())return cachedProfile();
+ try{const s=await getDoc(doc(db,'users',uid));const p=s.exists()?s.data():null;if(p)cacheProfile(p);return p}
+ catch(e){const p=cachedProfile();if(p)return p;throw e}
+}
 
 async function ensureOwnerAdmin(){
   if(!currentUser || currentUser.email?.toLowerCase()!==OWNER_EMAIL) return;
@@ -215,13 +275,13 @@ async function ensureOwnerAdmin(){
 }
 
 async function loadSites(){
-  const snap=await getDocs(collection(db,'sites'));
-  const all=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  allSites=all.filter(s=>s.active!==false);
-  $('siteSelect').innerHTML='<option value="">Choisir un chantier…</option>'+allSites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-  if(currentProfile?.role==='admin'){ renderSitesAdmin(all); v3populateAdvancedSites(all); }
+ let all=[];
+ if(isOfflineNow())all=cachedSites();
+ else{try{const snap=await getDocs(collection(db,'sites'));all=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));cacheSites(all)}catch(e){all=cachedSites();if(!all.length)throw e}}
+ allSites=all.filter(s=>s.active!==false);
+ $('siteSelect').innerHTML='<option value="">Choisir un chantier…</option>'+allSites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+ if(currentProfile?.role==='admin'&&navigator.onLine){renderSitesAdmin(all);v3populateAdvancedSites(all)}
 }
-
 function renderSitesAdmin(sites){
   $('siteList').innerHTML=sites.length?sites.map(s=>`<div class="list-item site-admin"><div><strong>${escapeHtml(s.name)}</strong><br><small>${s.active===false?'Désactivé':'Actif'}</small></div><div class="row-actions"><button class="ghost compact" data-site-rename="${s.id}">Renommer</button><button class="${s.active===false?'success':'danger'} compact" data-site-toggle="${s.id}" data-active="${s.active!==false}">${s.active===false?'Activer':'Désactiver'}</button><button class="delete compact" data-delete-site="${s.id}" data-site-name="${escapeHtml(s.name||'')}">Supprimer</button></div></div>`).join(''):'<p class="muted">Aucun chantier.</p>';
   document.querySelectorAll('[data-site-rename]').forEach(b=>b.onclick=()=>renameSite(b.dataset.siteRename));
@@ -236,8 +296,10 @@ async function renameSite(id){const site=(await getDoc(doc(db,'sites',id))).data
 async function toggleSite(id,isActive){await updateDoc(doc(db,'sites',id),{active:!isActive,updatedAt:serverTimestamp()});await loadSites()}
 
 async function findOpenSession(){
-  const qy=query(collection(db,'punches'),where('userId','==',currentUser.uid),where('status','==','open'));
-  const snap=await getDocs(qy); currentOpenSession=snap.empty?null:{id:snap.docs[0].id,...snap.docs[0].data()}; renderPresence();
+ if(isOfflineNow()){currentOpenSession=cachedOpenSession();renderPresence();return}
+ try{const qy=query(collection(db,'punches'),where('userId','==',currentUser.uid),where('status','==','open'));const snap=await getDocs(qy);currentOpenSession=snap.empty?null:{id:snap.docs[0].id,...snap.docs[0].data()};cacheOpenSession(currentOpenSession)}
+ catch(e){currentOpenSession=cachedOpenSession();if(!currentOpenSession)throw e}
+ renderPresence();
 }
 function renderPresence(){
   const on=!!currentOpenSession;
@@ -254,36 +316,40 @@ function renderPresence(){
 }
 
 async function punchIn(){
-  try{
-    if(currentProfile?.active===false) throw new Error('Ton compte est désactivé.');
-    if(currentOpenSession)return; const siteId=$('siteSelect').value;if(!siteId)throw new Error('Choisis un chantier.');
-    $('punchInBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
-    const site=allSites.find(s=>s.id===siteId);
-    await addDoc(collection(db,'punches'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
-    $('gpsStatus').textContent=`Entrée enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
-  setTimeout(()=>refreshVisibleTimesheetNames(),100);
-  }catch(e){$('gpsStatus').textContent=e.message;$('punchInBtn').disabled=false}
+ try{
+  if(currentProfile?.active===false)throw new Error('Ton compte est désactivé.');
+  if(currentOpenSession)return;
+  const siteId=$('siteSelect').value;if(!siteId)throw new Error('Choisis un chantier.');
+  $('punchInBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';
+  let gps=null;try{gps=await getPosition()}catch(e){if(!isOfflineNow())throw e;gps={lat:null,lng:null,accuracy:null,gpsUnavailable:true}}
+  const site=allSites.find(s=>s.id===siteId),at=localTs();
+  if(isOfflineNow()){
+   const id=uuidv4(),payload={userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:at,endAt:null,status:'open',startGps:gps,endGps:null,createdAt:at,offlineCreated:true};
+   enqueueOffline('punchIn',id,payload);currentOpenSession={id,...payload};cacheOpenSession(currentOpenSession);renderPresence();
+   $('gpsStatus').textContent='📴 Entrée enregistrée hors connexion. Synchronisation automatique au retour du réseau.';return;
+  }
+  await addDoc(collection(db,'punches'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
+  $('gpsStatus').textContent=`Entrée enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
+ }catch(e){$('gpsStatus').textContent=e.message;$('punchInBtn').disabled=false}
 }
 async function punchOut(){
-  try{
-    if(!currentOpenSession)return;
-    const workType=$('workTypeSelect').value;
-    if(!workType)throw new Error('Choisis sur quoi tu as travaillé avant de faire ton punch sortie.');
-    $('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';const gps=await getPosition();
-    const mealPatch={};
-    if(currentOpenSession.mealStartAt && !currentOpenSession.mealEndAt){
-      const mins=mealDeductionMinutes(currentOpenSession,new Date());
-      mealPatch.mealEndAt=serverTimestamp();
-      mealPatch.mealDurationMinutes=Math.min(MEAL_MINUTES,mins);
-    }
-    await updateDoc(doc(db,'punches',currentOpenSession.id),{workType,endAt:serverTimestamp(),status:'closed',endGps:gps,...mealPatch,updatedAt:serverTimestamp()});
-    $('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
-  }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
+ try{
+  if(!currentOpenSession)return;
+  const workType=$('workTypeSelect').value||currentOpenSession.workType||currentOpenSession.task;if(!workType)throw new Error('Choisis sur quoi tu as travaillé avant de faire ton punch sortie.');
+  $('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';
+  let gps=null;try{gps=await getPosition()}catch(e){if(!isOfflineNow())throw e;gps={lat:null,lng:null,accuracy:null,gpsUnavailable:true}}
+  const at=localTs(),patch={workType,endAt:at,status:'closed',endGps:gps,updatedAt:at};
+  if(currentOpenSession.mealStartAt&&!currentOpenSession.mealEndAt){patch.mealEndAt=at;patch.mealDurationMinutes=Math.min(MEAL_MINUTES,mealDeductionMinutes(currentOpenSession,new Date()))}
+  if(Array.isArray(currentOpenSession.workSegments)&&currentOpenSession.workSegments.length){const segs=[...currentOpenSession.workSegments];if(!segs[segs.length-1].endAt)segs[segs.length-1]={...segs[segs.length-1],endAt:at};patch.workSegments=segs}
+  if(isOfflineNow()){enqueueOffline('punchOut',currentOpenSession.id,patch);cacheOpenSession(null);currentOpenSession=null;renderPresence();$('gpsStatus').textContent='📴 Sortie enregistrée hors connexion. Synchronisation automatique au retour du réseau.';return}
+  await updateDoc(doc(db,'punches',currentOpenSession.id),{...patch,endAt:serverTimestamp(),updatedAt:serverTimestamp(),...(patch.mealEndAt?{mealEndAt:serverTimestamp()}:{})});
+  cacheOpenSession(null);$('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
+ }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
-
 async function loadHistory(){
-  const snap=await getDocs(query(collection(db,'punches'), where('userId','==',currentUser.uid)));
-  myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+ if(isOfflineNow()){myRows=cachedHistory();const local=cachedOpenSession();if(local&&!myRows.some(r=>r.id===local.id))myRows.unshift(local)}
+ else{try{const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid)));myRows=snap.docs.map(d=>({id:d.id,...d.data()}));cacheHistory(myRows)}catch(e){myRows=cachedHistory();if(!myRows.length)throw e}}
+
   $('historyBody').innerHTML = myRows.length ? myRows.map(r=>{
     const total = r.endAt ? paidHoursBetweenSession(r).toFixed(2)+' h' : 'En cours';
     const meal = r.mealStartAt ? Math.round(mealDeductionMinutes(r,r.endAt||new Date())) : 0;
@@ -466,7 +532,7 @@ function exportCsv(){
   const csv=lines.map(a=>a.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n'),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='feuilles-de-temps.csv';a.click();URL.revokeObjectURL(a.href);
 }
-async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(canManageTime())await loadAdmin()}
+async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(canManageTime()&&navigator.onLine)await loadAdmin();updateSyncStatus()}
 
 $('loginBtn').onclick=async()=>{
   const btn=$('loginBtn');
@@ -510,7 +576,7 @@ onAuthStateChanged(auth,async user=>{
   }
 
   try{
-    currentProfile=await loadProfile(user.uid);
+    currentProfile=await loadProfile(user.uid);if(currentProfile)cacheProfile(currentProfile);
 
     if(!currentProfile){
       await setDoc(doc(db,'users',user.uid),{
@@ -546,7 +612,7 @@ onAuthStateChanged(auth,async user=>{
     // Ces fonctions ne doivent jamais bloquer la connexion.
     try{ await loadForemanAssignment(); }catch(e){ console.warn('Équipe contremaître:',e); }
     try{ await switchRoleTab('employee'); }catch(e){ console.warn('Onglet employé:',e); }
-    try{ await refreshAll(); }catch(e){
+    try{ await refreshAll(); if(navigator.onLine)setTimeout(syncOfflineQueue,500); }catch(e){
       console.error('Chargement des données:',e);
       const punchMsg=$('punchMsg');
       if(punchMsg) punchMsg.textContent='Connexion réussie, mais certaines données n’ont pas pu être chargées.';
@@ -618,8 +684,8 @@ function v3populateAdvancedSites(sites=allSites){
 async function v3selectedSite(){
   const id=(currentProfile?.role==='admin' && v3advancedSiteSelect()?.value) || v3siteSelect()?.value;
   if(!id) return null;
-  const s=await getDoc(doc(db,"sites",id));
-  return s.exists()?{id:s.id,...s.data()}:null;
+  if(isOfflineNow())return allSites.find(s=>s.id===id)||cachedSites().find(s=>s.id===id)||null;
+  const s=await getDoc(doc(db,"sites",id));return s.exists()?{id:s.id,...s.data()}:null;
 }
 
 async function v3loadSiteDetails(){
@@ -1477,8 +1543,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ===== Changement chantier/tâche v3.9 =====
 async function openChangeWorkModal(){
  if(!currentOpenSession)return alert('Tu dois être punché.');
- const s=$('changeWorkSite'),q=await getDocs(collection(db,'sites'));
- const sites=q.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false);
+ const s=$('changeWorkSite'); const sites=isOfflineNow()?allSites:(await getDocs(collection(db,'sites'))).docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false);
  s.innerHTML=sites.map(x=>`<option value="${x.id}" data-name="${escapeHtml(x.name||'')}">${escapeHtml(x.name||'Sans nom')}</option>`).join('');
  if(currentOpenSession.siteId)s.value=currentOpenSession.siteId;
  const task=$('changeWorkTask');
@@ -1494,15 +1559,14 @@ function closeChangeWorkModal(){show('changeWorkModal',false)}
 async function confirmChangeWork(){
  if(!currentOpenSession)return;
  const s=$('changeWorkSite'),siteId=s.value,siteName=s.selectedOptions[0]?.dataset.name||s.selectedOptions[0]?.textContent||'';
- let task=$('changeWorkTask').value,other=$('changeWorkOther')?.value.trim()||'';
- if(task==='Autres'&&other)task='Autres — '+other;
- const now=Timestamp.now(),segments=Array.isArray(currentOpenSession.workSegments)?[...currentOpenSession.workSegments]:[];
+ let task=$('changeWorkTask').value,other=$('changeWorkOther')?.value.trim()||'';if(task==='Autres'&&other)task='Autres — '+other;
+ const now=localTs(),segments=Array.isArray(currentOpenSession.workSegments)?[...currentOpenSession.workSegments]:[];
  if(segments.length&&!segments[segments.length-1].endAt)segments[segments.length-1]={...segments[segments.length-1],endAt:now};
  if(!segments.length)segments.push({siteId:currentOpenSession.siteId||'',siteName:currentOpenSession.siteName||'',task:currentOpenSession.workType||currentOpenSession.task||'',startAt:currentOpenSession.startAt,endAt:now});
  segments.push({siteId,siteName,task,startAt:now,endAt:null});
- await updateDoc(doc(db,'punches',currentOpenSession.id),{siteId,siteName,workType:task,task,workSegments:segments,updatedAt:serverTimestamp()});
- currentOpenSession={...currentOpenSession,siteId,siteName,workType:task,task,workSegments:segments};
- closeChangeWorkModal(); if($('punchMsg'))$('punchMsg').textContent='Changement enregistré. Le compteur continue.';
+ const patch={siteId,siteName,workType:task,task,workSegments:segments,updatedAt:now};
+ if(isOfflineNow()){enqueueOffline('changeWork',currentOpenSession.id,patch);currentOpenSession={...currentOpenSession,...patch};cacheOpenSession(currentOpenSession);closeChangeWorkModal();if($('punchMsg'))$('punchMsg').textContent='📴 Changement enregistré hors connexion. Le compteur continue.';return}
+ await updateDoc(doc(db,'punches',currentOpenSession.id),{siteId,siteName,workType:task,task,workSegments:segments,updatedAt:serverTimestamp()});currentOpenSession={...currentOpenSession,...patch};cacheOpenSession(currentOpenSession);closeChangeWorkModal();if($('punchMsg'))$('punchMsg').textContent='Changement enregistré. Le compteur continue.';
 }
 function refreshChangeWorkButton(){show('changeWorkBtn',!!currentOpenSession)}
 document.addEventListener('DOMContentLoaded',()=>{
@@ -1686,3 +1750,5 @@ async function refreshVisibleTimesheetNames(){
     console.warn('Mise à jour noms feuilles de temps:',e);
   }
 }
+
+document.addEventListener('DOMContentLoaded',updateSyncStatus);

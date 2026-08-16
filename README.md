@@ -1,9 +1,15 @@
-# Punch Emelco v3.10.6
+# Punch Emelco v3.11 TEST — Mode hors connexion
 
-Correctif renforcé du chargement des employés.
+Version de test basée sur la v3.10.6 stable.
 
-- Correction de l'erreur `userMap` dans Feuilles de temps.
-- `loadAdmin()` est maintenant séparé en blocs : une erreur de feuilles de temps ne bloque plus Employés.
-- La liste Employés admin se charge indépendamment.
-- Le sélecteur d'équipe Contremaître se charge indépendamment.
-- En cas d'erreur Firebase, un message précis s'affiche au lieu de rester sur « Chargement… ».
+Après une première ouverture en ligne, l'application met en cache l'interface, Firebase, le profil et les chantiers.
+
+Hors connexion :
+- Punch entrée
+- Repas 30 min
+- Changer chantier / tâche
+- Punch sortie
+
+Les actions gardent leur heure originale, sont mises en file locale et sont synchronisées automatiquement au retour du réseau. Chaque session hors ligne utilise un identifiant unique pour éviter les doublons.
+
+Les fonctions administratives et les exports nécessitent encore Internet.

@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.5-test';
+const APP_VERSION = '3.11.7';
 
 
 
@@ -488,15 +488,7 @@ async function loadCorrections(){
   if(isForemanMode()){
     const visible=[];
     for(const r of reqs){
-      if(!foremanCanSeeCorrection(r)) continue;
-
-      if(foremanAssignment.siteId && !r.siteId && r.sessionId){
-        try{
-          const punchSnap=await getDoc(doc(db,'punches',r.sessionId));
-          if(!punchSnap.exists()) continue;
-          const p={id:punchSnap.id,...punchSnap.data()};
-          if(!foremanCanSeeRecord(p)) continue;
-        }catch(e){
+      if(!foremanCanSeeCorrection(r)) continue;catch(e){
           continue;
         }
       }
@@ -516,7 +508,7 @@ async function reviewCorrection(id,approve){
     if(!foremanCanSeeCorrection(r)) return alert('Cette demande ne fait pas partie de ton équipe.');
     if(r.sessionId){
       const punchSnap=await getDoc(doc(db,'punches',r.sessionId));
-      if(!punchSnap.exists() || !foremanCanSeeRecord({id:punchSnap.id,...punchSnap.data()})) return alert('Cette demande ne fait pas partie de ton chantier.');
+      if(!punchSnap.exists() || !foremanCanSeeRecord({id:punchSnap.id,...punchSnap.data()})) return alert('Cette demande ne fait pas partie des personnes que tu supervises.');
     }
   }
   try{
@@ -851,8 +843,7 @@ async function updatePunchTimeV32(punchId, patch){
 
 
 // ===== Affectation Contremaître v3.5 =====
-let foremanAssignment = { siteId:'', employeeIds:[] };
-let foremanSiteId=null; // ancien champ conservé uniquement pour compatibilité des anciennes données
+let foremanAssignment = { employeeIds:[] };
 
 function isForemanMode(){
   return currentRole() === ROLE_FOREMAN;
@@ -864,58 +855,33 @@ function managedEmployeeSet(){
 
 function foremanCanSeeRecord(record){
   if(!isForemanMode()) return true;
-  const employeeIds = managedEmployeeSet();
-  if(!employeeIds.has(record.userId)) return false;
-  if(foremanAssignment.siteId && record.siteId !== foremanAssignment.siteId) return false;
-  return true;
+  return managedEmployeeSet().has(record.userId);
 }
 
 function foremanCanSeeCorrection(req){
   if(!isForemanMode()) return true;
-  const employeeIds = managedEmployeeSet();
-  if(!employeeIds.has(req.userId)) return false;
-
-  // Les anciennes demandes peuvent ne pas contenir siteId.
-  // Dans ce cas on vérifie le punch lié si nécessaire au chargement.
-  if(foremanAssignment.siteId && req.siteId && req.siteId !== foremanAssignment.siteId) return false;
-  return true;
+  return managedEmployeeSet().has(req.userId);
 }
 
 async function loadForemanAssignment(){
   if(!currentUser || !canManageTime()) return;
-
   const snap = await getDoc(doc(db,'users',currentUser.uid));
   const data = snap.exists() ? snap.data() : {};
   foremanAssignment = {
-    siteId: data.foremanSiteId || '',
     employeeIds: Array.isArray(data.managedEmployeeIds) ? data.managedEmployeeIds : []
   };
-
   await populateForemanAssignmentUI();
 }
 
 async function populateForemanAssignmentUI(){
   const picker=$('foremanEmployeePicker');
-  if(!siteSelect || !picker) return;
+  if(!picker) return;
 
   try{
-    const [siteSnap,usersSnap]=await Promise.all([
-      getDocs(collection(db,'sites')),
-      getDocs(collection(db,'users'))
-    ]);
-
-    const sites=siteSnap.docs
-      .map(d=>({id:d.id,...d.data()}))
-      .filter(s=>s.active!==false)
-      .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-
-    siteSelect.innerHTML='<option value="">Choisir un chantier…</option>'+
-      sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name||'Sans nom')}</option>`).join('');
-    siteSelect.value=foremanAssignment.siteId||'';
-
+    const usersSnap=await getDocs(collection(db,'users'));
     const users=usersSnap.docs
       .map(d=>({id:d.id,...d.data()}))
-      .filter(u=>u.deleted!==true && u.active!==false && normalizeRole(u.role)==='employee')
+      .filter(u=>u.deleted!==true && u.active!==false && u.id!==currentUser.uid)
       .sort((a,b)=>(a.name||a.email||'').localeCompare(b.name||b.email||''));
 
     const selected=new Set(foremanAssignment.employeeIds||[]);
@@ -924,11 +890,11 @@ async function populateForemanAssignmentUI(){
       <label class="foreman-employee-choice">
         <input type="checkbox" data-foreman-employee="${u.id}" ${selected.has(u.id)?'checked':''}>
         <span>
-          <strong>${escapeHtml(u.name||u.email||'Employé')}</strong>
-          <small>${escapeHtml(u.email||'')}</small>
+          <strong>${escapeHtml(u.name||u.email||'Utilisateur')}</strong>
+          <small>${escapeHtml(u.email||'')} • ${escapeHtml(roleLabel(normalizeRole(u.role)))}</small>
         </span>
       </label>
-    `).join('') : '<p class="muted">Aucun employé actif.</p>';
+    `).join('') : '<p class="muted">Aucun autre utilisateur actif.</p>';
 
     picker.querySelectorAll('[data-foreman-employee]').forEach(cb=>{
       cb.addEventListener('change',updateForemanEmployeeCount);
@@ -936,7 +902,7 @@ async function populateForemanAssignmentUI(){
     updateForemanEmployeeCount();
   }catch(e){
     console.error('Chargement équipe contremaître:',e);
-    picker.innerHTML='<p class="muted">Erreur de chargement des employés : '+escapeHtml(e.message||String(e))+'</p>';
+    picker.innerHTML='<p class="muted">Erreur de chargement des utilisateurs : '+escapeHtml(e.message||String(e))+'</p>';
   }
 }
 
@@ -950,14 +916,11 @@ async function saveForemanAssignment(){
   if(!canManageTime()) return;
 
   const employeeIds = [...document.querySelectorAll('#foremanEmployeePicker [data-foreman-employee]:checked')]
-    .map(cb=>cb.dataset.foremanEmployee);
+    .map(cb=>cb.dataset.foremanEmployee)
+    .filter(id=>id && id!==currentUser.uid);
 
-  if(!siteId){
-    alert('Choisis un chantier.');
-    return;
-  }
   if(!employeeIds.length){
-    alert('Sélectionne au moins un employé.');
+    alert('Sélectionne au moins une personne à superviser.');
     return;
   }
 
@@ -966,16 +929,16 @@ async function saveForemanAssignment(){
     foremanAssignmentUpdatedAt: serverTimestamp()
   });
 
-  foremanAssignment = { siteId, employeeIds };
+  foremanAssignment = { employeeIds };
 
   if($('foremanAssignmentStatus')){
-    $('foremanAssignmentStatus').textContent = 'Équipe enregistrée.';
+    $('foremanAssignmentStatus').textContent = 'Employés supervisés enregistrés.';
   }
 
   await loadAdmin();
-      setTimeout(()=>refreshVisibleTimesheetNames(),100);
+  setTimeout(()=>refreshVisibleTimesheetNames(),100);
   if(typeof v3approvals === 'function') await v3approvals();
-      if(typeof loadForemanPayrollPreview === 'function') await loadForemanPayrollPreview();
+  if(typeof loadForemanPayrollPreview === 'function') await loadForemanPayrollPreview();
 }
 
 function setupForemanAssignmentUI(){

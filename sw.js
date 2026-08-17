@@ -1,5 +1,5 @@
-const CACHE='punch-v3-11-5-foreman-clean';
-const ASSETS=['./','./index.html','./style.css?v=3.11.5','./app.js?v=3.11.5','./manifest.webmanifest',
+const CACHE='punch-v3-11-7-supervised-roles';
+const ASSETS=['./','./index.html','./style.css?v=3.11.7','./app.js?v=3.11.7','./manifest.webmanifest',
 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js','https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js','https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{for(const a of ASSETS){try{await c.add(a)}catch(x){}}}))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x))))])));

@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.1-test';
+const APP_VERSION = '3.11.5-test';
 
 
 
@@ -47,6 +47,12 @@ function normalizeRole(role){
 function currentRole(){
   if(isOwnerEmail(auth.currentUser?.email)) return ROLE_ADMIN;
   return normalizeRole(currentProfile?.role);
+}
+
+function foremanManagedIds(){
+  return Array.isArray(currentProfile?.managedEmployeeIds)
+    ? currentProfile.managedEmployeeIds
+    : (Array.isArray(foremanAssignment?.managedEmployeeIds) ? foremanAssignment.managedEmployeeIds : []);
 }
 
 function canManageTime(){
@@ -250,14 +256,7 @@ const show=(id,on=true)=>$(id).classList.toggle('hidden',!on);
 const msg=(id,text)=>$(id).textContent=text||'';
 const dtLocal=d=>{if(!d)return'';const x=toDate(d),pad=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`};
 
-async function getPosition(){
-  if(!navigator.geolocation) throw new Error('GPS non disponible sur cet appareil.');
-  return new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(
-    p=>res({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),
-    ()=>rej(new Error('Position GPS refusée ou indisponible.')),
-    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
-  ));
-}
+async function getPosition(){ return Promise.resolve({lat:null,lng:null,accuracy:null,gpsDisabled:true}); }
 
 async function loadProfile(uid){
  if(isOfflineNow())return cachedProfile();
@@ -320,8 +319,8 @@ async function punchIn(){
   if(currentProfile?.active===false)throw new Error('Ton compte est désactivé.');
   if(currentOpenSession)return;
   const siteId=$('siteSelect').value;if(!siteId)throw new Error('Choisis un chantier.');
-  $('punchInBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';
-  let gps=null;try{gps=await getPosition()}catch(e){if(!isOfflineNow())throw e;gps={lat:null,lng:null,accuracy:null,gpsUnavailable:true}}
+  $('punchInBtn').disabled=true;$('gpsStatus').textContent='';
+  const gps={lat:null,lng:null,accuracy:null,gpsDisabled:true}
   const site=allSites.find(s=>s.id===siteId),at=localTs();
   if(isOfflineNow()){
    const id=uuidv4(),payload={userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:at,endAt:null,status:'open',startGps:gps,endGps:null,createdAt:at,offlineCreated:true};
@@ -329,21 +328,21 @@ async function punchIn(){
    $('gpsStatus').textContent='📴 Entrée enregistrée hors connexion. Synchronisation automatique au retour du réseau.';return;
   }
   await addDoc(collection(db,'punches'),{userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId,siteName:site?.name||'',startAt:serverTimestamp(),endAt:null,status:'open',startGps:gps,endGps:null,createdAt:serverTimestamp()});
-  $('gpsStatus').textContent=`Entrée enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
+  $('gpsStatus').textContent='Entrée enregistrée.';await refreshAll();
  }catch(e){$('gpsStatus').textContent=e.message;$('punchInBtn').disabled=false}
 }
 async function punchOut(){
  try{
   if(!currentOpenSession)return;
   const workType=$('workTypeSelect').value||currentOpenSession.workType||currentOpenSession.task;if(!workType)throw new Error('Choisis sur quoi tu as travaillé avant de faire ton punch sortie.');
-  $('punchOutBtn').disabled=true;$('gpsStatus').textContent='Localisation GPS en cours…';
-  let gps=null;try{gps=await getPosition()}catch(e){if(!isOfflineNow())throw e;gps={lat:null,lng:null,accuracy:null,gpsUnavailable:true}}
+  $('punchOutBtn').disabled=true;$('gpsStatus').textContent='';
+  const gps={lat:null,lng:null,accuracy:null,gpsDisabled:true}
   const at=localTs(),patch={workType,endAt:at,status:'closed',endGps:gps,updatedAt:at};
   if(currentOpenSession.mealStartAt&&!currentOpenSession.mealEndAt){patch.mealEndAt=at;patch.mealDurationMinutes=Math.min(MEAL_MINUTES,mealDeductionMinutes(currentOpenSession,new Date()))}
   if(Array.isArray(currentOpenSession.workSegments)&&currentOpenSession.workSegments.length){const segs=[...currentOpenSession.workSegments];if(!segs[segs.length-1].endAt)segs[segs.length-1]={...segs[segs.length-1],endAt:at};patch.workSegments=segs}
   if(isOfflineNow()){enqueueOffline('punchOut',currentOpenSession.id,patch);cacheOpenSession(null);currentOpenSession=null;renderPresence();$('gpsStatus').textContent='📴 Sortie enregistrée hors connexion. Synchronisation automatique au retour du réseau.';return}
   await updateDoc(doc(db,'punches',currentOpenSession.id),{...patch,endAt:serverTimestamp(),updatedAt:serverTimestamp(),...(patch.mealEndAt?{mealEndAt:serverTimestamp()}:{})});
-  cacheOpenSession(null);$('gpsStatus').textContent=`Sortie enregistrée. Précision GPS ±${Math.round(gps.accuracy)} m.`;await refreshAll();
+  cacheOpenSession(null);$('gpsStatus').textContent='Sortie enregistrée.';await refreshAll();
  }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
 async function loadHistory(){
@@ -654,16 +653,7 @@ function v3distanceM(a,b,c,d){
   return 2*R*Math.asin(Math.sqrt(q));
 }
 
-function v3gps(){
-  return new Promise((resolve,reject)=>{
-    if(!navigator.geolocation) return reject(new Error("GPS non disponible"));
-    navigator.geolocation.getCurrentPosition(
-      p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),
-      e=>reject(new Error(e.message||"Position refusée")),
-      {enableHighAccuracy:true,timeout:15000,maximumAge:15000}
-    );
-  });
-}
+function v3gps(){ return Promise.resolve({lat:null,lng:null,accuracy:null,gpsDisabled:true}); }
 
 function v3siteSelect(){
   return v3el("siteSelect") || document.querySelector('select[name="site"]') || document.querySelector("select");
@@ -718,13 +708,7 @@ async function v3saveSiteDetails(){
   alert("Détails du chantier enregistrés.");
 }
 
-async function v3checkGeofence(){
-  const s=await v3selectedSite();
-  if(!s || s.lat==null || s.lng==null || !s.radiusM) return {ok:true,bypass:true,site:s};
-  const g=await v3gps();
-  const d=v3distanceM(g.lat,g.lng,Number(s.lat),Number(s.lng));
-  return {ok:d<=Number(s.radiusM),distance:d,site:s,gps:g};
-}
+async function v3checkGeofence(){return {ok:true,bypass:true,site:null};}
 
 async function v3saveDailyNote(){
   const u=auth.currentUser; if(!u) return;
@@ -868,6 +852,7 @@ async function updatePunchTimeV32(punchId, patch){
 
 // ===== Affectation Contremaître v3.5 =====
 let foremanAssignment = { siteId:'', employeeIds:[] };
+let foremanSiteId=null; // ancien champ conservé uniquement pour compatibilité des anciennes données
 
 function isForemanMode(){
   return currentRole() === ROLE_FOREMAN;
@@ -910,7 +895,6 @@ async function loadForemanAssignment(){
 }
 
 async function populateForemanAssignmentUI(){
-  const siteSelect=$('foremanSiteSelect');
   const picker=$('foremanEmployeePicker');
   if(!siteSelect || !picker) return;
 
@@ -965,7 +949,6 @@ function updateForemanEmployeeCount(){
 async function saveForemanAssignment(){
   if(!canManageTime()) return;
 
-  const siteId = $('foremanSiteSelect')?.value || '';
   const employeeIds = [...document.querySelectorAll('#foremanEmployeePicker [data-foreman-employee]:checked')]
     .map(cb=>cb.dataset.foremanEmployee);
 
@@ -979,7 +962,6 @@ async function saveForemanAssignment(){
   }
 
   await updateDoc(doc(db,'users',currentUser.uid),{
-    foremanSiteId: siteId,
     managedEmployeeIds: employeeIds,
     foremanAssignmentUpdatedAt: serverTimestamp()
   });

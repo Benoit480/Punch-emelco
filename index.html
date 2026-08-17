@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.11.1" />
+  <link rel="stylesheet" href="style.css?v=3.11.5" />
 </head>
 <body>
 <div id="app">
@@ -55,25 +55,22 @@
 
 <div id="foremanAssignmentCard" class="card foreman-assignment-card">
   <div class="eyebrow">MON ÉQUIPE</div>
-  <h3>Chantier et employés supervisés</h3>
-  <p class="muted small">Les heures, approbations et corrections affichées plus bas seront limitées à ce chantier et à ces employés.</p>
+  <h3>Employés supervisés</h3>
+  <p class="muted small">Les heures, approbations et corrections affichées plus bas seront limitées aux employés que tu supervises.</p>
 
-  <label>Chantier supervisé
-    <select id="foremanSiteSelect">
-      <option value="">Choisir un chantier…</option>
-    </select>
-  </label>
+  
 
   <div class="foreman-employees-head">
-    <strong>Employés que je gère</strong>
+    <strong>Employés supervisés</strong>
     <span id="foremanEmployeesCount" class="muted small">0 sélectionné</span>
   </div>
 
-  <div id="foremanEmployeePicker" class="foreman-employee-picker">
+  <p class="muted small">La supervision est basée uniquement sur les employés assignés, peu importe leur chantier.</p>
+<div id="foremanEmployeePicker" class="foreman-employee-picker">
     <p class="muted">Chargement...</p>
   </div>
 
-  <button id="saveForemanAssignmentBtn" class="primary">Enregistrer mon équipe</button>
+  <button id="saveForemanAssignmentBtn" class="primary">Enregistrer mes employés</button>
   <div id="foremanAssignmentStatus" class="muted small"></div>
 </div>
 
@@ -125,7 +122,7 @@
               <div id="mealBreakStatus" class="muted small"></div>
             </div>
             <button id="changeWorkBtn" class="change-work-btn hidden">🔄 Changer chantier / tâche</button>
-            <p id="gpsStatus" class="muted small">Le GPS sera demandé au moment du punch.</p>
+            <p id="gpsStatus" class="muted small"></p>
           </section>
           <section class="card stats">
             <h2>Mes heures</h2>
@@ -191,10 +188,10 @@
     <label>Rayon géofence (m)<input id="siteRadiusInput" type="number" min="25" step="25" value="250"></label>
   </div>
   <div class="row-actions">
-    <button id="useCurrentLocationBtn" class="btn-secondary">Utiliser ma position</button>
+    
     <button id="saveSiteDetailsBtn" class="btn-primary">Enregistrer les détails</button>
   </div>
-  <p class="muted">Le géofence valide la position au moment du punch. Sans coordonnées, le punch reste permis.</p>
+  
 </section>
 
 <section id="dailyNoteSection" class="panel hidden">
@@ -247,7 +244,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.11.1"></script>
+  <script type="module" src="app.js?v=3.11.5"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

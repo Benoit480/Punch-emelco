@@ -1,15 +1,13 @@
-# Punch Emelco v3.11 TEST — Mode hors connexion
+# Punch Emelco v3.11.4 TEST — Contremaître par employés
 
-Version de test basée sur la v3.10.6 stable.
+Modification principale :
+- retrait de « Chantier supervisé »;
+- un contremaître supervise maintenant seulement les employés qui lui sont assignés;
+- les employés supervisés restent visibles peu importe le chantier où ils travaillent;
+- approbations, corrections, feuilles de temps et export paie du contremaître utilisent la liste d'employés supervisés;
+- le contremaître conserve aussi ses propres heures dans l'export paie;
+- GPS reste désactivé;
+- mode hors connexion conservé.
 
-Après une première ouverture en ligne, l'application met en cache l'interface, Firebase, le profil et les chantiers.
-
-Hors connexion :
-- Punch entrée
-- Repas 30 min
-- Changer chantier / tâche
-- Punch sortie
-
-Les actions gardent leur heure originale, sont mises en file locale et sont synchronisées automatiquement au retour du réseau. Chaque session hors ligne utilise un identifiant unique pour éviter les doublons.
-
-Les fonctions administratives et les exports nécessitent encore Internet.
+Les anciennes données `foremanSiteId` éventuellement déjà présentes dans Firestore peuvent rester,
+mais elles ne servent plus à limiter la supervision.

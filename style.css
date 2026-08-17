@@ -505,3 +505,11 @@ button.delete:active{
 
 /* ===== Contremaître employés seulement v3.11.4 ===== */
 #foremanEmployeePicker{margin-top:8px}
+
+/* ===== Suppression punch depuis Modifier v3.11.9 ===== */
+.edit-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.edit-actions .danger{background:#7c2f3d;border-color:#a54657;color:#fff}
+@media(max-width:640px){
+  .edit-actions{flex-direction:column;align-items:stretch}
+  .edit-actions button{width:100%}
+}

@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.11.8" />
+  <link rel="stylesheet" href="style.css?v=3.11.9" />
 </head>
 <body>
 <div id="app">
@@ -238,12 +238,15 @@
       <label>Entrée<input id="editStart" type="datetime-local" /></label>
       <label>Sortie<input id="editEnd" type="datetime-local" /></label>
       <label id="reasonWrap">Raison<textarea id="editReason" rows="3" placeholder="Ex. oubli de punch"></textarea></label>
-      <button id="saveEditBtn" class="primary">Envoyer la demande</button>
+      <div class="edit-actions">
+        <button id="saveEditBtn" class="primary">Envoyer la demande</button>
+        <button id="deletePunchBtn" class="danger hidden">Supprimer ce punch</button>
+      </div>
       <p id="editMsg" class="message"></p>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.11.8"></script>
+  <script type="module" src="app.js?v=3.11.9"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

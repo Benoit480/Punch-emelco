@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.8';
+const APP_VERSION = '3.11.9';
 
 
 
@@ -464,7 +464,7 @@ function openEditModal(sessionId,asAdmin){
   if(asAdmin && isForemanMode() && !foremanCanSeeRecord(editingSession)){editingSession=null;return alert('Cet employé ne fait pas partie de ton équipe.');}
   editingAsAdmin=asAdmin; $('editModalTitle').textContent=asAdmin?'Modifier les heures':'Demander une correction';
   $('editStart').value=dtLocal(editingSession.startAt); $('editEnd').value=dtLocal(editingSession.endAt); $('editReason').value=''; show('reasonWrap',!asAdmin);
-  $('saveEditBtn').textContent=asAdmin?'Enregistrer':'Envoyer la demande'; msg('editMsg',''); show('editModal',true);
+  $('saveEditBtn').textContent=asAdmin?'Enregistrer':'Envoyer la demande'; show('deletePunchBtn',asAdmin); msg('editMsg',''); show('editModal',true);
 }
 function closeEdit(){show('editModal',false);editingSession=null}
 async function saveEdit(){
@@ -479,6 +479,37 @@ async function saveEdit(){
     await addDoc(collection(db,'correctionRequests'),{sessionId:editingSession.id,userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId:editingSession.siteId||'',siteName:editingSession.siteName||'',originalStart:editingSession.startAt,originalEnd:editingSession.endAt||null,requestedStart:Timestamp.fromDate(new Date(start)),requestedEnd:end?Timestamp.fromDate(new Date(end)):null,reason,status:'pending',createdAt:serverTimestamp()});
     msg('editMsg','Demande envoyée à l’administrateur.');setTimeout(closeEdit,900);
   }catch(e){msg('editMsg',e.message)}
+}
+
+async function deleteEditingPunch(){
+  try{
+    if(!editingSession || !editingAsAdmin) return;
+
+    if(isForemanMode() && !foremanCanSeeRecord(editingSession)){
+      throw new Error('Cette personne ne fait pas partie de tes employés supervisés.');
+    }
+
+    const employeeName=editingSession.userName||editingSession.userEmail||'cet employé';
+    const dateText=fmtDateTime(editingSession.startAt);
+
+    if(!confirm(`Supprimer complètement ce punch de ${employeeName} (${dateText}) ?`)) return;
+    if(!confirm('Cette suppression enlèvera les heures du total de la semaine. Confirmer la suppression ?')) return;
+
+    $('deletePunchBtn').disabled=true;
+    $('deletePunchBtn').textContent='Suppression…';
+
+    await deleteDoc(doc(db,'punches',editingSession.id));
+
+    closeEdit();
+    await refreshAll();
+  }catch(e){
+    msg('editMsg','Impossible de supprimer : '+e.message);
+  }finally{
+    if($('deletePunchBtn')){
+      $('deletePunchBtn').disabled=false;
+      $('deletePunchBtn').textContent='Supprimer ce punch';
+    }
+  }
 }
 
 async function loadCorrections(){
@@ -545,7 +576,8 @@ $('registerBtn').onclick=async()=>{try{msg('regMsg','');const name=$('regName').
 if($('payWeekPrev'))$('payWeekPrev').onclick=()=>changePayWeek(-1);
 if($('payWeekNext'))$('payWeekNext').onclick=()=>changePayWeek(1);
 $('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;if($('mealBreakBtn'))$('mealBreakBtn').onclick=startMealBreak;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
-$('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
+$('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;
+$('deletePunchBtn').onclick=deleteEditingPunch;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
 
 onAuthStateChanged(auth,async user=>{
   currentUser=user;

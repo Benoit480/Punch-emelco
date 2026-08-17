@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.7';
+const APP_VERSION = '3.11.8';
 
 
 
@@ -52,7 +52,7 @@ function currentRole(){
 function foremanManagedIds(){
   return Array.isArray(currentProfile?.managedEmployeeIds)
     ? currentProfile.managedEmployeeIds
-    : (Array.isArray(foremanAssignment?.managedEmployeeIds) ? foremanAssignment.managedEmployeeIds : []);
+    : (Array.isArray(foremanAssignment?.employeeIds) ? foremanAssignment.employeeIds : []);
 }
 
 function canManageTime(){
@@ -488,10 +488,7 @@ async function loadCorrections(){
   if(isForemanMode()){
     const visible=[];
     for(const r of reqs){
-      if(!foremanCanSeeCorrection(r)) continue;catch(e){
-          continue;
-        }
-      }
+      if(!foremanCanSeeCorrection(r)) continue;
       visible.push(r);
     }
     reqs=visible;

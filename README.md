@@ -1,10 +1,15 @@
-# Punch Emelco v3.11.3 TEST — Sans GPS
+# Punch Emelco v3.11 TEST — Mode hors connexion
 
-- aucune demande de position GPS;
-- géofence désactivée;
-- aucune position enregistrée au punch entrée/sortie;
-- aucune position requise au changement de chantier/tâche;
-- mode hors connexion conservé;
-- le reste de l'application est inchangé.
+Version de test basée sur la v3.10.6 stable.
 
-Les anciennes coordonnées déjà présentes dans Firestore sont conservées, mais aucune nouvelle position n'est enregistrée.
+Après une première ouverture en ligne, l'application met en cache l'interface, Firebase, le profil et les chantiers.
+
+Hors connexion :
+- Punch entrée
+- Repas 30 min
+- Changer chantier / tâche
+- Punch sortie
+
+Les actions gardent leur heure originale, sont mises en file locale et sont synchronisées automatiquement au retour du réseau. Chaque session hors ligne utilise un identifiant unique pour éviter les doublons.
+
+Les fonctions administratives et les exports nécessitent encore Internet.

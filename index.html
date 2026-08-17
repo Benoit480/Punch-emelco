@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.11.2" />
+  <link rel="stylesheet" href="style.css?v=3.11.3" />
 </head>
 <body>
 <div id="app">
@@ -125,7 +125,7 @@
               <div id="mealBreakStatus" class="muted small"></div>
             </div>
             <button id="changeWorkBtn" class="change-work-btn hidden">🔄 Changer chantier / tâche</button>
-            <p id="gpsStatus" class="muted small">Le GPS sera demandé au moment du punch.</p>
+            <p id="gpsStatus" class="muted small"></p>
           </section>
           <section class="card stats">
             <h2>Mes heures</h2>
@@ -191,10 +191,10 @@
     <label>Rayon géofence (m)<input id="siteRadiusInput" type="number" min="25" step="25" value="250"></label>
   </div>
   <div class="row-actions">
-    <button id="useCurrentLocationBtn" class="btn-secondary">Utiliser ma position</button>
+    
     <button id="saveSiteDetailsBtn" class="btn-primary">Enregistrer les détails</button>
   </div>
-  <p class="muted">Le géofence valide la position au moment du punch. Sans coordonnées, le punch reste permis.</p>
+  
 </section>
 
 <section id="dailyNoteSection" class="panel hidden">
@@ -247,7 +247,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.11.2"></script>
+  <script type="module" src="app.js?v=3.11.3"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

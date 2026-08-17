@@ -1,9 +1,10 @@
-# Punch Emelco v3.11.2 TEST — Safe area iPhone
+# Punch Emelco v3.11.3 TEST — Sans GPS
 
-Modification visuelle uniquement :
+- aucune demande de position GPS;
+- géofence désactivée;
+- aucune position enregistrée au punch entrée/sortie;
+- aucune position requise au changement de chantier/tâche;
+- mode hors connexion conservé;
+- le reste de l'application est inchangé.
 
-- le menu hamburger est descendu sous la barre système iPhone;
-- le bouton Déconnexion est descendu;
-- la pastille Synchronisé reste sous Déconnexion;
-- prise en charge de `env(safe-area-inset-top)` pour Safari et PWA iPhone;
-- aucun changement au punch, au mode hors connexion ou à Firebase.
+Les anciennes coordonnées déjà présentes dans Firestore sont conservées, mais aucune nouvelle position n'est enregistrée.

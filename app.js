@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.1-test';
+const APP_VERSION = '3.11.2-test';
 
 
 

@@ -447,3 +447,58 @@ button.delete:active{
   }
   #logoutBtn{margin-left:auto}
 }
+
+
+/* ===== iPhone safe area header v3.11.2 ===== */
+.topbar{
+  position:relative;
+  padding-top:calc(16px + env(safe-area-inset-top)) !important;
+  padding-left:max(16px, env(safe-area-inset-left)) !important;
+  padding-right:max(16px, env(safe-area-inset-right)) !important;
+  min-height:calc(92px + env(safe-area-inset-top));
+  align-items:center;
+}
+
+/* Le bouton hamburger reste bien sous la barre système */
+#menuToggleBtn{
+  margin-top:4px;
+  flex:0 0 auto;
+}
+
+/* Déconnexion descend avec le reste du header */
+#logoutBtn{
+  margin-top:4px;
+}
+
+/* Pastille de synchronisation sous Déconnexion, sans toucher à la barre iPhone */
+.sync-status{
+  top:auto !important;
+}
+
+@media(max-width:640px){
+  .topbar{
+    padding-top:calc(18px + env(safe-area-inset-top)) !important;
+    padding-bottom:24px !important;
+    min-height:calc(104px + env(safe-area-inset-top));
+  }
+
+  #menuToggleBtn{
+    margin-top:2px;
+  }
+
+  #logoutBtn{
+    margin-top:2px;
+  }
+
+  .sync-status{
+    right:14px !important;
+    bottom:5px !important;
+  }
+}
+
+/* En mode standalone/PWA sur iPhone, garder encore un peu d'air sous le notch */
+@media(display-mode:standalone){
+  .topbar{
+    padding-top:calc(20px + env(safe-area-inset-top)) !important;
+  }
+}

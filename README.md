@@ -1,15 +1,9 @@
-# Punch Emelco v3.11 TEST — Mode hors connexion
+# Punch Emelco v3.11.2 TEST — Safe area iPhone
 
-Version de test basée sur la v3.10.6 stable.
+Modification visuelle uniquement :
 
-Après une première ouverture en ligne, l'application met en cache l'interface, Firebase, le profil et les chantiers.
-
-Hors connexion :
-- Punch entrée
-- Repas 30 min
-- Changer chantier / tâche
-- Punch sortie
-
-Les actions gardent leur heure originale, sont mises en file locale et sont synchronisées automatiquement au retour du réseau. Chaque session hors ligne utilise un identifiant unique pour éviter les doublons.
-
-Les fonctions administratives et les exports nécessitent encore Internet.
+- le menu hamburger est descendu sous la barre système iPhone;
+- le bouton Déconnexion est descendu;
+- la pastille Synchronisé reste sous Déconnexion;
+- prise en charge de `env(safe-area-inset-top)` pour Safari et PWA iPhone;
+- aucun changement au punch, au mode hors connexion ou à Firebase.

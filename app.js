@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.12.3';
+const APP_VERSION = '3.12.4';
 
 
 
@@ -687,11 +687,36 @@ function exportCsv(){
     lines.push(['Journée','Date','Chantier','Tâche','Entrée','Sortie','Repas (min)','Total heures']);
 
     let total=0;
+    let currentDayKey='';
+    let currentDayLabel='';
+    let currentDayTotal=0;
+
+    const pushDayTotal=()=>{
+      if(!currentDayKey) return;
+      lines.push([`TOTAL ${currentDayLabel.toUpperCase()}`,'','','','','','',currentDayTotal.toFixed(2)]);
+      currentDayTotal=0;
+    };
+
     for(const r of person.rows){
       const d=toDate(r.startAt);
+      const dayKey=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const dayLabel=d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'long'});
+
+      if(currentDayKey && dayKey!==currentDayKey){
+        pushDayTotal();
+        lines.push([]);
+      }
+
+      if(dayKey!==currentDayKey){
+        currentDayKey=dayKey;
+        currentDayLabel=dayLabel;
+      }
+
       const hours=r.endAt?paidHoursBetweenSession(r):0;
       total+=hours;
+      currentDayTotal+=hours;
       const meal=r.mealStartAt?Math.round(mealDeductionMinutes(r,r.endAt||new Date())):0;
+
       lines.push([
         d.toLocaleDateString('fr-CA',{weekday:'long'}),
         fmtDate(r.startAt),
@@ -703,6 +728,8 @@ function exportCsv(){
         r.endAt?hours.toFixed(2):''
       ]);
     }
+
+    pushDayTotal();
     lines.push(['TOTAL SEMAINE','','','','','','',total.toFixed(2)]);
 
     // Séparer clairement les employés.

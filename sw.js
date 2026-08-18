@@ -1,5 +1,5 @@
-const CACHE='punch-v3-12-0-edit-split';
-const ASSETS=['./','./index.html','./style.css?v=3.12.0','./app.js?v=3.12.0','./manifest.webmanifest',
+const CACHE='punch-v3-12-1-custom-split-hours';
+const ASSETS=['./','./index.html','./style.css?v=3.12.1','./app.js?v=3.12.1','./manifest.webmanifest',
 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js','https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js','https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{for(const a of ASSETS){try{await c.add(a)}catch(x){}}}))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x))))])));

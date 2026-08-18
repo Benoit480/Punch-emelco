@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.12.0" />
+  <link rel="stylesheet" href="style.css?v=3.12.1" />
 </head>
 <body>
 <div id="app">
@@ -264,16 +264,33 @@
       </div>
 
       <div id="editSplitPanel" class="hidden">
-        <p class="muted small">Choisis l’heure où diviser ce punch. La durée totale restera la même.</p>
-        <label>Heure de fractionnement<input id="splitAt" type="datetime-local" /></label>
-        <label>Chantier de la 2e période<select id="splitSite"></select></label>
-        <label>Tâche de la 2e période<select id="splitTask">
-          <option value="Bâtiment / structure">Bâtiment / structure</option>
-          <option value="Béton fondation/plancher">Béton fondation/plancher</option>
-          <option value="Transport">Transport</option>
-          <option value="Autres">Autres</option>
-        </select></label>
-        <label id="splitOtherTaskWrap" class="hidden">Précision de la tâche<input id="splitOtherTask" type="text" placeholder="Préciser la tâche"></label>
+        <p class="muted small">Entre les heures exactes que tu veux pour chaque période. Tu peux laisser un trou entre les deux périodes.</p>
+
+        <div class="split-period-card">
+          <strong>Période 1</strong>
+          <div class="edit-grid">
+            <label>Entrée<input id="split1Start" type="datetime-local" /></label>
+            <label>Sortie<input id="split1End" type="datetime-local" /></label>
+          </div>
+          <p class="muted small">Le chantier et la tâche de la période 1 restent ceux du punch actuel. Tu peux les changer dans l’onglet Détails avant de fractionner.</p>
+        </div>
+
+        <div class="split-period-card">
+          <strong>Période 2</strong>
+          <div class="edit-grid">
+            <label>Entrée<input id="split2Start" type="datetime-local" /></label>
+            <label>Sortie<input id="split2End" type="datetime-local" /></label>
+          </div>
+          <label>Chantier<select id="splitSite"></select></label>
+          <label>Tâche<select id="splitTask">
+            <option value="Bâtiment / structure">Bâtiment / structure</option>
+            <option value="Béton fondation/plancher">Béton fondation/plancher</option>
+            <option value="Transport">Transport</option>
+            <option value="Autres">Autres</option>
+          </select></label>
+          <label id="splitOtherTaskWrap" class="hidden">Précision de la tâche<input id="splitOtherTask" type="text" placeholder="Préciser la tâche"></label>
+        </div>
+
         <div id="splitPreview" class="split-preview"></div>
         <button id="confirmSplitBtn" class="primary">Fractionner la journée</button>
       </div>
@@ -281,7 +298,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.12.0"></script>
+  <script type="module" src="app.js?v=3.12.1"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

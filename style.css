@@ -526,3 +526,7 @@ button.delete:active{
 .split-preview strong{display:block;margin-bottom:4px}
 #confirmSplitBtn{width:100%}
 @media(max-width:640px){.edit-tabs{grid-template-columns:1fr}.edit-hours-card{max-height:88vh;overflow:auto}}
+
+/* ===== Fractionnement heures libres v3.12.1 ===== */
+.split-period-card{border:1px solid #2a415f;border-radius:16px;padding:14px;margin:12px 0;background:#0d1a2b}
+.split-period-card>strong{display:block;margin-bottom:10px;font-size:1rem}

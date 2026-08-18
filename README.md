@@ -1,14 +1,9 @@
-# Punch Emelco v3.12.0 — Modifier et fractionner les heures
+# Punch Emelco v3.12.1 — Fractionnement avec heures libres
 
-Ajouts pour Admin / Contremaître :
-- modifier entrée et sortie;
-- changer le chantier;
-- changer la tâche;
-- fractionner un punch en 2 périodes;
-- choisir chantier et tâche de la 2e période;
-- aucun doublon d’heures : la 1re période se termine exactement où la 2e commence;
-- le repas n’est jamais copié dans les deux périodes;
-- les périodes créées restent modifiables/supprimables séparément.
+Dans « Fractionner la journée », l’admin ou le contremaître peut maintenant saisir librement :
+- entrée période 1;
+- sortie période 1;
+- entrée période 2;
+- sortie période 2.
 
-Pour les contremaîtres, la création de la 2e période est limitée aux personnes supervisées.
-IMPORTANT : publier aussi firestore.rules dans Firebase.
+Un trou entre les périodes est permis. Les périodes ne peuvent pas se chevaucher. Les heures saisies deviennent les heures payées exactes et la déduction repas du punch original est retirée lors du fractionnement afin d’éviter une double déduction.

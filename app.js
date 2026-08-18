@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.12.0';
+const APP_VERSION = '3.12.1';
 
 
 
@@ -486,11 +486,15 @@ function setEditTab(tab){
 }
 function updateSplitPreview(){
   if(!editingSession)return;
-  const a=new Date($('editStart').value),b=new Date($('editEnd').value),x=new Date($('splitAt').value);
+  const a=new Date($('split1Start').value),b=new Date($('split1End').value),c=new Date($('split2Start').value),d=new Date($('split2End').value);
   const el=$('splitPreview'); if(!el)return;
-  if(!isFinite(a)||!isFinite(b)||!isFinite(x)||x<=a||x>=b){el.innerHTML='<span class="muted small">Choisis une heure située entre l’entrée et la sortie.</span>';return}
-  const h1=(x-a)/3600000,h2=(b-x)/3600000;
-  el.innerHTML=`<strong>La journée sera divisée en 2 périodes</strong><br><span>${a.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${x.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h1.toFixed(2)} h)</span><br><span>${x.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${b.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h2.toFixed(2)} h)</span>`;
+  if(!isFinite(a)||!isFinite(b)||!isFinite(c)||!isFinite(d)){
+    el.innerHTML='<span class="muted small">Entre les 4 heures pour voir le résultat.</span>';return;
+  }
+  if(b<=a||d<=c){el.innerHTML='<span class="muted small">Chaque sortie doit être après son entrée.</span>';return;}
+  if(c<b){el.innerHTML='<span class="muted small">Les deux périodes ne peuvent pas se chevaucher.</span>';return;}
+  const h1=(b-a)/3600000,h2=(d-c)/3600000,total=h1+h2,gap=(c-b)/60000;
+  el.innerHTML=`<strong>Résultat du fractionnement</strong><br><span>Période 1 : ${a.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${b.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h1.toFixed(2)} h)</span><br><span>Période 2 : ${c.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${d.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h2.toFixed(2)} h)</span><br>${gap>0?`<span class="muted small">Trou entre les périodes : ${Math.round(gap)} min</span><br>`:''}<strong>Total payé : ${total.toFixed(2)} h</strong>`;
 }
 function openEditModal(sessionId,asAdmin){
   const rows=asAdmin?(window.__adminRows||[]):myRows; editingSession=rows.find(r=>r.id===sessionId); if(!editingSession)return;
@@ -504,8 +508,12 @@ function openEditModal(sessionId,asAdmin){
   $('editTask').value=t.base; $('editOtherTask').value=t.other; show('editOtherTaskWrap',t.base==='Autres');
   $('splitTask').value=t.base; $('splitOtherTask').value=t.other; show('splitOtherTaskWrap',t.base==='Autres');
   if(editingSession.startAt&&editingSession.endAt){
-    const a=toDate(editingSession.startAt),b=toDate(editingSession.endAt),mid=new Date((a.getTime()+b.getTime())/2); $('splitAt').value=dtLocal(mid);
-  } else $('splitAt').value='';
+    const a=toDate(editingSession.startAt),b=toDate(editingSession.endAt),mid=new Date((a.getTime()+b.getTime())/2);
+    $('split1Start').value=dtLocal(a); $('split1End').value=dtLocal(mid);
+    $('split2Start').value=dtLocal(mid); $('split2End').value=dtLocal(b);
+  }else{
+    $('split1Start').value=''; $('split1End').value=''; $('split2Start').value=''; $('split2End').value='';
+  }
   $('editSplitTab').disabled=!asAdmin||!editingSession.endAt;
   $('saveEditBtn').textContent=asAdmin?'Enregistrer les modifications':'Envoyer la demande'; msg('editMsg',''); setEditTab('details'); show('editModal',true);
 }
@@ -529,34 +537,39 @@ async function splitEditingPunch(){
   try{
     if(!editingSession||!editingAsAdmin||!editingSession.endAt)throw new Error('Ce punch ne peut pas être fractionné.');
     if(isForemanMode()&&!foremanCanSeeRecord(editingSession))throw new Error('Cette personne ne fait pas partie de tes employés supervisés.');
-    const start=new Date($('editStart').value),end=new Date($('editEnd').value),split=new Date($('splitAt').value);
-    if(!isFinite(start)||!isFinite(end)||!isFinite(split))throw new Error('Vérifie les heures.');
-    if(split<=start||split>=end)throw new Error('Le fractionnement doit être entre l’entrée et la sortie.');
+
+    const p1Start=new Date($('split1Start').value),p1End=new Date($('split1End').value),p2Start=new Date($('split2Start').value),p2End=new Date($('split2End').value);
+    if(!isFinite(p1Start)||!isFinite(p1End)||!isFinite(p2Start)||!isFinite(p2End))throw new Error('Entre les heures des deux périodes.');
+    if(p1End<=p1Start)throw new Error('La sortie de la période 1 doit être après son entrée.');
+    if(p2End<=p2Start)throw new Error('La sortie de la période 2 doit être après son entrée.');
+    if(p2Start<p1End)throw new Error('Les deux périodes ne peuvent pas se chevaucher.');
+
     const site2Id=$('splitSite').value,site2=allSites.find(x=>x.id===site2Id),task2=selectedTask('split');
     if(!site2Id)throw new Error('Choisis le chantier de la 2e période.');
-    if(!confirm(`Fractionner ce punch à ${split.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} ?`))return;
+    if(!task2)throw new Error('Choisis la tâche de la 2e période.');
+
+    const h1=(p1End-p1Start)/3600000,h2=(p2End-p2Start)/3600000;
+    if(!confirm(`Créer 2 périodes totalisant ${(h1+h2).toFixed(2)} h ?`))return;
+
     $('confirmSplitBtn').disabled=true; $('confirmSplitBtn').textContent='Fractionnement…';
 
-    // Le repas est conservé dans une seule période seulement.
-    const mealStart=editingSession.mealStartAt?toDate(editingSession.mealStartAt):null;
-    const mealEnd=editingSession.mealEndAt?toDate(editingSession.mealEndAt):null;
-    const mealInSecond=mealStart && mealStart>=split;
+    // Les heures saisies deviennent les heures payées exactes. Le repas du punch original
+    // est retiré des deux périodes afin de ne pas déduire du temps une deuxième fois.
     const clearMeal={mealStartAt:null,mealEndAt:null,mealDurationMinutes:0,mealUsed:false};
-    const firstMeal=mealInSecond?clearMeal:{};
-    const secondMeal=mealInSecond?{
-      mealStartAt:editingSession.mealStartAt||null,mealEndAt:editingSession.mealEndAt||null,
-      mealDurationMinutes:editingSession.mealDurationMinutes||0,mealUsed:editingSession.mealUsed===true
-    }:clearMeal;
+    const groupId=editingSession.splitGroupId||editingSession.id;
 
     await updateDoc(doc(db,'punches',editingSession.id),{
-      startAt:Timestamp.fromDate(start),endAt:Timestamp.fromDate(split),status:'closed',workSegments:[],...firstMeal,updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitGroupId:editingSession.splitGroupId||editingSession.id
+      startAt:Timestamp.fromDate(p1Start),endAt:Timestamp.fromDate(p1End),status:'closed',workSegments:[],...clearMeal,
+      updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitGroupId:groupId
     });
+
     await addDoc(collection(db,'punches'),{
       userId:editingSession.userId,userName:editingSession.userName||'',userEmail:editingSession.userEmail||'',
       siteId:site2Id,siteName:site2?.name||$('splitSite').selectedOptions[0]?.textContent||'',workType:task2,task:task2,
-      startAt:Timestamp.fromDate(split),endAt:Timestamp.fromDate(end),status:'closed',startGps:null,endGps:null,workSegments:[],...secondMeal,
-      createdAt:serverTimestamp(),updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitFrom:editingSession.id,splitGroupId:editingSession.splitGroupId||editingSession.id
+      startAt:Timestamp.fromDate(p2Start),endAt:Timestamp.fromDate(p2End),status:'closed',startGps:null,endGps:null,workSegments:[],...clearMeal,
+      createdAt:serverTimestamp(),updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitFrom:editingSession.id,splitGroupId:groupId
     });
+
     closeEdit(); await refreshAll();
   }catch(e){msg('editMsg',e.message)}
   finally{if($('confirmSplitBtn')){$('confirmSplitBtn').disabled=false;$('confirmSplitBtn').textContent='Fractionner la journée'}}
@@ -660,7 +673,7 @@ $('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punc
 $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;
 $('editDetailsTab').onclick=()=>setEditTab('details');$('editSplitTab').onclick=()=>setEditTab('split');
 $('editTask').onchange=()=>show('editOtherTaskWrap',$('editTask').value==='Autres');$('splitTask').onchange=()=>show('splitOtherTaskWrap',$('splitTask').value==='Autres');
-$('splitAt').oninput=updateSplitPreview;$('confirmSplitBtn').onclick=splitEditingPunch;
+['split1Start','split1End','split2Start','split2End'].forEach(id=>$(id).oninput=updateSplitPreview);$('confirmSplitBtn').onclick=splitEditingPunch;
 $('deletePunchBtn').onclick=deleteEditingPunch;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
 
 onAuthStateChanged(auth,async user=>{

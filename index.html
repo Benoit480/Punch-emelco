@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.11.9" />
+  <link rel="stylesheet" href="style.css?v=3.12.0" />
 </head>
 <body>
 <div id="app">
@@ -233,20 +233,55 @@
   </div>
 
   <div id="editModal" class="modal hidden">
-    <div class="modal-card">
+    <div class="modal-card edit-hours-card">
       <div class="section-head"><h2 id="editModalTitle">Modifier les heures</h2><button id="closeEditModal" class="ghost compact">Fermer</button></div>
-      <label>Entrée<input id="editStart" type="datetime-local" /></label>
-      <label>Sortie<input id="editEnd" type="datetime-local" /></label>
-      <label id="reasonWrap">Raison<textarea id="editReason" rows="3" placeholder="Ex. oubli de punch"></textarea></label>
-      <div class="edit-actions">
-        <button id="saveEditBtn" class="primary">Envoyer la demande</button>
-        <button id="deletePunchBtn" class="danger hidden">Supprimer ce punch</button>
+
+      <div id="editManagerFields">
+        <div class="edit-tabs">
+          <button type="button" id="editDetailsTab" class="edit-tab active">Détails</button>
+          <button type="button" id="editSplitTab" class="edit-tab">Fractionner la journée</button>
+        </div>
+      </div>
+
+      <div id="editDetailsPanel">
+        <label>Entrée<input id="editStart" type="datetime-local" /></label>
+        <label>Sortie<input id="editEnd" type="datetime-local" /></label>
+        <div id="editWorkFields" class="hidden">
+          <label>Chantier<select id="editSite"></select></label>
+          <label>Tâche<select id="editTask">
+            <option value="Bâtiment / structure">Bâtiment / structure</option>
+            <option value="Béton fondation/plancher">Béton fondation/plancher</option>
+            <option value="Transport">Transport</option>
+            <option value="Autres">Autres</option>
+          </select></label>
+          <label id="editOtherTaskWrap" class="hidden">Précision de la tâche<input id="editOtherTask" type="text" placeholder="Préciser la tâche"></label>
+        </div>
+        <label id="reasonWrap">Raison<textarea id="editReason" rows="3" placeholder="Ex. oubli de punch"></textarea></label>
+        <div class="edit-actions">
+          <button id="saveEditBtn" class="primary">Envoyer la demande</button>
+          <button id="deletePunchBtn" class="danger hidden">Supprimer ce punch</button>
+        </div>
+      </div>
+
+      <div id="editSplitPanel" class="hidden">
+        <p class="muted small">Choisis l’heure où diviser ce punch. La durée totale restera la même.</p>
+        <label>Heure de fractionnement<input id="splitAt" type="datetime-local" /></label>
+        <label>Chantier de la 2e période<select id="splitSite"></select></label>
+        <label>Tâche de la 2e période<select id="splitTask">
+          <option value="Bâtiment / structure">Bâtiment / structure</option>
+          <option value="Béton fondation/plancher">Béton fondation/plancher</option>
+          <option value="Transport">Transport</option>
+          <option value="Autres">Autres</option>
+        </select></label>
+        <label id="splitOtherTaskWrap" class="hidden">Précision de la tâche<input id="splitOtherTask" type="text" placeholder="Préciser la tâche"></label>
+        <div id="splitPreview" class="split-preview"></div>
+        <button id="confirmSplitBtn" class="primary">Fractionner la journée</button>
       </div>
       <p id="editMsg" class="message"></p>
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.11.9"></script>
+  <script type="module" src="app.js?v=3.12.0"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

@@ -1,12 +1,14 @@
-# Punch Emelco v3.11.9 — Supprimer un punch
+# Punch Emelco v3.12.0 — Modifier et fractionner les heures
 
-Ajout dans « Modifier les heures » :
-- bouton « Supprimer ce punch »;
-- double confirmation avant suppression;
-- suppression complète de l'entrée;
-- recalcul automatique des totaux après suppression;
-- un contremaître peut supprimer seulement les punchs des personnes qu'il supervise;
-- un administrateur peut supprimer les punchs;
-- un employé normal ne voit pas le bouton.
+Ajouts pour Admin / Contremaître :
+- modifier entrée et sortie;
+- changer le chantier;
+- changer la tâche;
+- fractionner un punch en 2 périodes;
+- choisir chantier et tâche de la 2e période;
+- aucun doublon d’heures : la 1re période se termine exactement où la 2e commence;
+- le repas n’est jamais copié dans les deux périodes;
+- les périodes créées restent modifiables/supprimables séparément.
 
-Important : publier aussi `firestore.rules` dans Firebase afin d'autoriser la suppression par contremaître.
+Pour les contremaîtres, la création de la 2e période est limitée aux personnes supervisées.
+IMPORTANT : publier aussi firestore.rules dans Firebase.

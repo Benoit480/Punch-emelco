@@ -78,8 +78,11 @@ service cloud.firestore {
     match /punches/{punchId} {
       allow read: if signedIn();
 
-      allow create: if signedIn()
-                    && request.resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && (
+        request.resource.data.userId == request.auth.uid
+        || isAdmin()
+        || foremanManages(request.resource.data.userId)
+      );
 
       allow update: if canManageTime() || (
         signedIn()

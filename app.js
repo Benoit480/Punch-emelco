@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.11.9';
+const APP_VERSION = '3.12.0';
 
 
 
@@ -459,12 +459,55 @@ async function setUserRole(uid,role){
   if(!canManageUsers()) throw new Error('Seul un administrateur peut modifier les rôles.');try{await updateDoc(doc(db,'users',uid),{role,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de changer le rôle : '+e.message)}}
 async function setUserActive(uid,active){if(!canManageUsers())return alert('Seul un administrateur peut activer ou désactiver un compte.');try{await updateDoc(doc(db,'users',uid),{active,updatedAt:serverTimestamp()});await loadEmployees()}catch(e){alert('Impossible de modifier le compte : '+e.message)}}
 
+function taskBaseAndOther(value){
+  const v=(value||'').trim();
+  if(v.startsWith('Autres — ')) return {base:'Autres',other:v.slice(9).trim()};
+  const allowed=['Bâtiment / structure','Béton fondation/plancher','Transport','Autres'];
+  return allowed.includes(v)?{base:v,other:''}:{base:'Autres',other:v};
+}
+function selectedTask(prefix){
+  let v=$(prefix+'Task')?.value||'Autres';
+  const other=$(prefix+'OtherTask')?.value.trim()||'';
+  if(v==='Autres'&&other)v='Autres — '+other;
+  return v;
+}
+function populateEditSites(selectId,currentId,currentName){
+  const el=$(selectId); if(!el)return;
+  const sites=[...allSites];
+  if(currentId && !sites.some(x=>x.id===currentId)) sites.unshift({id:currentId,name:currentName||'Chantier actuel'});
+  el.innerHTML=sites.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.name||'Sans nom')}</option>`).join('');
+  if(currentId)el.value=currentId;
+}
+function setEditTab(tab){
+  const split=tab==='split';
+  show('editDetailsPanel',!split); show('editSplitPanel',split);
+  $('editDetailsTab')?.classList.toggle('active',!split); $('editSplitTab')?.classList.toggle('active',split);
+  msg('editMsg',''); if(split) updateSplitPreview();
+}
+function updateSplitPreview(){
+  if(!editingSession)return;
+  const a=new Date($('editStart').value),b=new Date($('editEnd').value),x=new Date($('splitAt').value);
+  const el=$('splitPreview'); if(!el)return;
+  if(!isFinite(a)||!isFinite(b)||!isFinite(x)||x<=a||x>=b){el.innerHTML='<span class="muted small">Choisis une heure située entre l’entrée et la sortie.</span>';return}
+  const h1=(x-a)/3600000,h2=(b-x)/3600000;
+  el.innerHTML=`<strong>La journée sera divisée en 2 périodes</strong><br><span>${a.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${x.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h1.toFixed(2)} h)</span><br><span>${x.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${b.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h2.toFixed(2)} h)</span>`;
+}
 function openEditModal(sessionId,asAdmin){
   const rows=asAdmin?(window.__adminRows||[]):myRows; editingSession=rows.find(r=>r.id===sessionId); if(!editingSession)return;
   if(asAdmin && isForemanMode() && !foremanCanSeeRecord(editingSession)){editingSession=null;return alert('Cet employé ne fait pas partie de ton équipe.');}
   editingAsAdmin=asAdmin; $('editModalTitle').textContent=asAdmin?'Modifier les heures':'Demander une correction';
   $('editStart').value=dtLocal(editingSession.startAt); $('editEnd').value=dtLocal(editingSession.endAt); $('editReason').value=''; show('reasonWrap',!asAdmin);
-  $('saveEditBtn').textContent=asAdmin?'Enregistrer':'Envoyer la demande'; show('deletePunchBtn',asAdmin); msg('editMsg',''); show('editModal',true);
+  show('editManagerFields',asAdmin); show('editWorkFields',asAdmin); show('deletePunchBtn',asAdmin);
+  populateEditSites('editSite',editingSession.siteId||'',editingSession.siteName||'');
+  populateEditSites('splitSite',editingSession.siteId||'',editingSession.siteName||'');
+  const t=taskBaseAndOther(editingSession.workType||editingSession.task||'Autres');
+  $('editTask').value=t.base; $('editOtherTask').value=t.other; show('editOtherTaskWrap',t.base==='Autres');
+  $('splitTask').value=t.base; $('splitOtherTask').value=t.other; show('splitOtherTaskWrap',t.base==='Autres');
+  if(editingSession.startAt&&editingSession.endAt){
+    const a=toDate(editingSession.startAt),b=toDate(editingSession.endAt),mid=new Date((a.getTime()+b.getTime())/2); $('splitAt').value=dtLocal(mid);
+  } else $('splitAt').value='';
+  $('editSplitTab').disabled=!asAdmin||!editingSession.endAt;
+  $('saveEditBtn').textContent=asAdmin?'Enregistrer les modifications':'Envoyer la demande'; msg('editMsg',''); setEditTab('details'); show('editModal',true);
 }
 function closeEdit(){show('editModal',false);editingSession=null}
 async function saveEdit(){
@@ -472,13 +515,51 @@ async function saveEdit(){
     if(!editingSession)return; const start=$('editStart').value,end=$('editEnd').value;
     if(!start)throw new Error('L’heure d’entrée est obligatoire.'); if(end && new Date(end)<=new Date(start))throw new Error('La sortie doit être après l’entrée.');
     if(editingAsAdmin){
-      await updateDoc(doc(db,'punches',editingSession.id),{startAt:Timestamp.fromDate(new Date(start)),endAt:end?Timestamp.fromDate(new Date(end)):null,status:end?'closed':'open',updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid});
+      const siteId=$('editSite').value,site=allSites.find(x=>x.id===siteId); const task=selectedTask('edit');
+      if(!siteId)throw new Error('Choisis un chantier.'); if(!task)throw new Error('Choisis une tâche.');
+      await updateDoc(doc(db,'punches',editingSession.id),{startAt:Timestamp.fromDate(new Date(start)),endAt:end?Timestamp.fromDate(new Date(end)):null,status:end?'closed':'open',siteId,siteName:site?.name||$('editSite').selectedOptions[0]?.textContent||editingSession.siteName||'',workType:task,task,workSegments:[],updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid});
       closeEdit();await refreshAll();return;
     }
     const reason=$('editReason').value.trim();if(!reason)throw new Error('Inscris la raison de la correction.');
     await addDoc(collection(db,'correctionRequests'),{sessionId:editingSession.id,userId:currentUser.uid,userName:currentProfile.name||currentUser.email,userEmail:currentUser.email,siteId:editingSession.siteId||'',siteName:editingSession.siteName||'',originalStart:editingSession.startAt,originalEnd:editingSession.endAt||null,requestedStart:Timestamp.fromDate(new Date(start)),requestedEnd:end?Timestamp.fromDate(new Date(end)):null,reason,status:'pending',createdAt:serverTimestamp()});
     msg('editMsg','Demande envoyée à l’administrateur.');setTimeout(closeEdit,900);
   }catch(e){msg('editMsg',e.message)}
+}
+async function splitEditingPunch(){
+  try{
+    if(!editingSession||!editingAsAdmin||!editingSession.endAt)throw new Error('Ce punch ne peut pas être fractionné.');
+    if(isForemanMode()&&!foremanCanSeeRecord(editingSession))throw new Error('Cette personne ne fait pas partie de tes employés supervisés.');
+    const start=new Date($('editStart').value),end=new Date($('editEnd').value),split=new Date($('splitAt').value);
+    if(!isFinite(start)||!isFinite(end)||!isFinite(split))throw new Error('Vérifie les heures.');
+    if(split<=start||split>=end)throw new Error('Le fractionnement doit être entre l’entrée et la sortie.');
+    const site2Id=$('splitSite').value,site2=allSites.find(x=>x.id===site2Id),task2=selectedTask('split');
+    if(!site2Id)throw new Error('Choisis le chantier de la 2e période.');
+    if(!confirm(`Fractionner ce punch à ${split.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} ?`))return;
+    $('confirmSplitBtn').disabled=true; $('confirmSplitBtn').textContent='Fractionnement…';
+
+    // Le repas est conservé dans une seule période seulement.
+    const mealStart=editingSession.mealStartAt?toDate(editingSession.mealStartAt):null;
+    const mealEnd=editingSession.mealEndAt?toDate(editingSession.mealEndAt):null;
+    const mealInSecond=mealStart && mealStart>=split;
+    const clearMeal={mealStartAt:null,mealEndAt:null,mealDurationMinutes:0,mealUsed:false};
+    const firstMeal=mealInSecond?clearMeal:{};
+    const secondMeal=mealInSecond?{
+      mealStartAt:editingSession.mealStartAt||null,mealEndAt:editingSession.mealEndAt||null,
+      mealDurationMinutes:editingSession.mealDurationMinutes||0,mealUsed:editingSession.mealUsed===true
+    }:clearMeal;
+
+    await updateDoc(doc(db,'punches',editingSession.id),{
+      startAt:Timestamp.fromDate(start),endAt:Timestamp.fromDate(split),status:'closed',workSegments:[],...firstMeal,updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitGroupId:editingSession.splitGroupId||editingSession.id
+    });
+    await addDoc(collection(db,'punches'),{
+      userId:editingSession.userId,userName:editingSession.userName||'',userEmail:editingSession.userEmail||'',
+      siteId:site2Id,siteName:site2?.name||$('splitSite').selectedOptions[0]?.textContent||'',workType:task2,task:task2,
+      startAt:Timestamp.fromDate(split),endAt:Timestamp.fromDate(end),status:'closed',startGps:null,endGps:null,workSegments:[],...secondMeal,
+      createdAt:serverTimestamp(),updatedAt:serverTimestamp(),editedByAdmin:currentUser.uid,splitFrom:editingSession.id,splitGroupId:editingSession.splitGroupId||editingSession.id
+    });
+    closeEdit(); await refreshAll();
+  }catch(e){msg('editMsg',e.message)}
+  finally{if($('confirmSplitBtn')){$('confirmSplitBtn').disabled=false;$('confirmSplitBtn').textContent='Fractionner la journée'}}
 }
 
 async function deleteEditingPunch(){
@@ -577,6 +658,9 @@ if($('payWeekPrev'))$('payWeekPrev').onclick=()=>changePayWeek(-1);
 if($('payWeekNext'))$('payWeekNext').onclick=()=>changePayWeek(1);
 $('logoutBtn').onclick=()=>signOut(auth);$('punchInBtn').onclick=punchIn;$('punchOutBtn').onclick=punchOut;if($('mealBreakBtn'))$('mealBreakBtn').onclick=startMealBreak;$('refreshBtn').onclick=refreshAll;$('addSiteBtn').onclick=addSite;$('exportCsvBtn').onclick=exportCsv;$('refreshCorrectionsBtn').onclick=loadCorrections;
 $('closeEditModal').onclick=closeEdit;$('saveEditBtn').onclick=saveEdit;
+$('editDetailsTab').onclick=()=>setEditTab('details');$('editSplitTab').onclick=()=>setEditTab('split');
+$('editTask').onchange=()=>show('editOtherTaskWrap',$('editTask').value==='Autres');$('splitTask').onchange=()=>show('splitOtherTaskWrap',$('splitTask').value==='Autres');
+$('splitAt').oninput=updateSplitPreview;$('confirmSplitBtn').onclick=splitEditingPunch;
 $('deletePunchBtn').onclick=deleteEditingPunch;$('editModal').onclick=e=>{if(e.target===$('editModal'))closeEdit()};
 
 onAuthStateChanged(auth,async user=>{

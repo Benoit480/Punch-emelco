@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.12.6';
+const APP_VERSION = '3.12.7';
 
 
 
@@ -354,33 +354,123 @@ async function punchOut(){
   cacheOpenSession(null);$('gpsStatus').textContent='Sortie enregistrée.';await refreshAll();
  }catch(e){$('gpsStatus').textContent=e.message;$('punchOutBtn').disabled=false}
 }
-async function loadHistory(){
- if(isOfflineNow()){myRows=cachedHistory();const local=cachedOpenSession();if(local&&!myRows.some(r=>r.id===local.id))myRows.unshift(local)}
- else{try{const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid)));myRows=snap.docs.map(d=>({id:d.id,...d.data()}));cacheHistory(myRows)}catch(e){myRows=cachedHistory();if(!myRows.length)throw e}}
+let employeePreviousWeekOffset=-1;
 
-  $('historyBody').innerHTML = myRows.length ? myRows.map(r=>{
-    const total = r.endAt ? formatHoursMinutes(paidHoursBetweenSession(r)) : 'En cours';
-    const meal = r.mealStartAt ? Math.round(mealDeductionMinutes(r,r.endAt||new Date())) : 0;
-    return `<div class="history-card">
-      <div class="history-card-head">
-        <div>
-          <strong>${fmtDateOnly(r.startAt)}</strong>
-          <div class="muted small">${historySegmentsHtml(r)}</div>
-        </div>
-        <div class="history-total">${total}</div>
+function employeeWeekRange(offset=0){
+  const now=new Date();
+  const base=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const sunday=new Date(base);
+  sunday.setDate(base.getDate()-base.getDay()+(offset*7));
+  sunday.setHours(0,0,0,0);
+  const next=new Date(sunday);
+  next.setDate(sunday.getDate()+7);
+  return {start:sunday,end:next};
+}
+
+function employeeWeekLabel(start,end){
+  const last=new Date(end);
+  last.setDate(last.getDate()-1);
+  return `${start.toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} au ${last.toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}`;
+}
+
+function employeeHistoryCardHtml(r){
+  const total=r.endAt?formatHoursMinutes(paidHoursBetweenSession(r)):'En cours';
+  const meal=r.mealStartAt?Math.round(mealDeductionMinutes(r,r.endAt||new Date())):0;
+  return `<div class="history-card">
+    <div class="history-card-head">
+      <div>
+        <strong>${fmtDateOnly(r.startAt)}</strong>
+        <div class="muted small">${historySegmentsHtml(r)}</div>
       </div>
-      ${meal ? `<div class="history-meal">🍽️ Repas : ${meal} min</div>` : ''}
-      <div class="history-actions">
-        <button class="secondary compact" data-correct="${r.id}">Correction</button>
-      </div>
-    </div>`;
-  }).join('') : '<p class="muted">Aucun historique.</p>';
+      <div class="history-total">${total}</div>
+    </div>
+    ${meal?`<div class="history-meal">🍽️ Repas : ${meal} min</div>`:''}
+    <div class="history-actions">
+      <button class="secondary compact" data-correct="${r.id}">Correction</button>
+    </div>
+  </div>`;
+}
+
+function renderPreviousEmployeeWeek(){
+  const body=$('previousHistoryBody');
+  if(!body) return;
+
+  const {start,end}=employeeWeekRange(employeePreviousWeekOffset);
+  const rows=myRows
+    .filter(r=>{
+      if(!r.startAt) return false;
+      const d=toDate(r.startAt);
+      return d>=start && d<end;
+    })
+    .sort((a,b)=>toDate(b.startAt)-toDate(a.startAt));
+
+  $('previousWeekLabel').textContent=employeeWeekLabel(start,end);
+
+  const total=rows.reduce((sum,r)=>sum+(r.endAt?paidHoursBetweenSession(r):0),0);
+  $('previousWeekTotal').innerHTML=`<span>Total de la semaine</span><strong>${formatHoursMinutes(total)}</strong>`;
+
+  body.innerHTML=rows.length
+    ? rows.map(employeeHistoryCardHtml).join('')
+    : '<p class="muted">Aucune heure enregistrée pour cette semaine.</p>';
+
+  const newer=$('previousWeekNewerBtn');
+  if(newer) newer.disabled=employeePreviousWeekOffset>=-1;
+
+  bindHistoryCorrectionButtons();
+}
+
+async function loadHistory(){
+  if(isOfflineNow()){
+    myRows=cachedHistory();
+    const local=cachedOpenSession();
+    if(local&&!myRows.some(r=>r.id===local.id)) myRows.unshift(local);
+  }else{
+    try{
+      const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid)));
+      myRows=snap.docs.map(d=>({id:d.id,...d.data()}));
+      cacheHistory(myRows);
+    }catch(e){
+      myRows=cachedHistory();
+      if(!myRows.length) throw e;
+    }
+  }
+
+  const now=new Date();
+  const {start:startWeek,end:endWeek}=employeeWeekRange(0);
+
+  const currentWeekRows=myRows
+    .filter(r=>{
+      if(!r.startAt) return false;
+      const d=toDate(r.startAt);
+      return d>=startWeek && d<endWeek;
+    })
+    .sort((a,b)=>toDate(b.startAt)-toDate(a.startAt));
+
+  if($('currentWeekHistoryLabel')) $('currentWeekHistoryLabel').textContent=employeeWeekLabel(startWeek,endWeek);
+
+  $('historyBody').innerHTML=currentWeekRows.length
+    ? currentWeekRows.map(employeeHistoryCardHtml).join('')
+    : '<p class="muted">Aucune heure enregistrée cette semaine.</p>';
 
   bindHistoryCorrectionButtons();
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
-  const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=now.getDay(),startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
-  let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=paidHoursBetweenSession(r,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
-  $('todayHours').textContent=formatHoursMinutes(today);$('weekHours').textContent=formatHoursMinutes(week);if($('overtimeHours'))$('overtimeHours').textContent='0 h';
+
+  const startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  let today=0,week=0;
+  for(const r of myRows){
+    if(!r.startAt) continue;
+    const started=toDate(r.startAt);
+    const end=r.endAt||Timestamp.fromDate(now);
+    const hours=paidHoursBetweenSession(r,end);
+    if(started>=startToday) today+=hours;
+    if(started>=startWeek && started<endWeek) week+=hours;
+  }
+
+  $('todayHours').textContent=formatHoursMinutes(today);
+  $('weekHours').textContent=formatHoursMinutes(week);
+  if($('overtimeHours')) $('overtimeHours').textContent='0 h';
+
+  renderPreviousEmployeeWeek();
 }
 
 
@@ -1942,3 +2032,17 @@ async function refreshVisibleTimesheetNames(){
 }
 
 document.addEventListener('DOMContentLoaded',updateSyncStatus);
+
+
+document.addEventListener('DOMContentLoaded',()=>{
+  $('previousWeekOlderBtn')?.addEventListener('click',()=>{
+    employeePreviousWeekOffset-=1;
+    renderPreviousEmployeeWeek();
+  });
+  $('previousWeekNewerBtn')?.addEventListener('click',()=>{
+    if(employeePreviousWeekOffset<-1){
+      employeePreviousWeekOffset+=1;
+      renderPreviousEmployeeWeek();
+    }
+  });
+});

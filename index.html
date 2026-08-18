@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Punch Travail" />
   <title>Punch Travail</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css?v=3.12.6" />
+  <link rel="stylesheet" href="style.css?v=3.12.7" />
 </head>
 <body>
 <div id="app">
@@ -110,10 +110,26 @@
           </section>
         </div>
 
-        <section class="card">
-          <div class="section-head"><h2>Mon historique</h2><button id="refreshBtn" class="ghost compact">Actualiser</button></div>
+        <section class="card" id="currentWeekHistoryCard">
+          <div class="section-head"><h2>Semaine en cours</h2><button id="refreshBtn" class="ghost compact">Actualiser</button></div>
+          <div id="currentWeekHistoryLabel" class="muted small week-history-label"></div>
           <p class="muted small">Utilise « Correction » si une heure d'entrée ou de sortie doit être modifiée.</p>
           <div class="table-wrap"><table><thead><tr><th>Date</th><th>Chantier</th><th>Type</th><th>Entrée</th><th>Sortie</th><th>Total</th><th></th></tr></thead><tbody id="historyBody"></tbody></table></div>
+        </section>
+
+        <section class="card" id="previousWeeksCard">
+          <div class="section-head">
+            <div>
+              <h2>Semaines antérieures</h2>
+              <div id="previousWeekLabel" class="muted small week-history-label"></div>
+            </div>
+            <div class="week-history-nav">
+              <button id="previousWeekOlderBtn" class="ghost compact" aria-label="Semaine plus ancienne">‹</button>
+              <button id="previousWeekNewerBtn" class="ghost compact" aria-label="Semaine plus récente">›</button>
+            </div>
+          </div>
+          <div id="previousWeekTotal" class="previous-week-total"></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Chantier</th><th>Type</th><th>Entrée</th><th>Sortie</th><th>Total</th><th></th></tr></thead><tbody id="previousHistoryBody"></tbody></table></div>
         </section>
 
         <section id="adminPanel" class="hidden">
@@ -279,7 +295,7 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=3.12.6"></script>
+  <script type="module" src="app.js?v=3.12.7"></script>
 
 <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
 <aside id="roleDrawer" class="role-drawer" aria-hidden="true">

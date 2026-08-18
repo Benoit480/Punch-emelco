@@ -1,10 +1,10 @@
-# Punch Emelco v3.12.6 — Heures en heures/minutes
+# Punch Emelco v3.12.7 — Historique employé par semaine
 
-Affichage modifié :
-- 1.50 h devient 1 h 30 min;
-- 8.75 h devient 8 h 45 min;
-- 4.93 h devient environ 4 h 56 min;
-- les calculs internes restent en heures décimales;
-- les totaux jour/semaine, durées et CSV sont affichés en heures + minutes réelles.
+Côté employé :
+- sous « Mes heures », l'historique principal affiche seulement la semaine en cours;
+- ajout d'une section « Semaines antérieures »;
+- boutons ‹ et › pour naviguer dans les anciennes semaines;
+- total de chaque ancienne semaine affiché;
+- les demandes de correction restent disponibles sur les anciennes semaines.
 
-Aucun autre fonctionnement n'est modifié.
+Les vues Contremaître et Administration ne sont pas modifiées.

@@ -530,3 +530,23 @@ button.delete:active{
 /* ===== Fractionnement heures libres v3.12.1 ===== */
 .split-period-card{border:1px solid #2a415f;border-radius:16px;padding:14px;margin:12px 0;background:#0d1a2b}
 .split-period-card>strong{display:block;margin-bottom:10px;font-size:1rem}
+
+/* ===== Historique employé par semaine v3.12.7 ===== */
+.week-history-label{margin-top:4px}
+.week-history-nav{display:flex;gap:8px}
+.previous-week-total{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:14px 0 10px;
+  padding:13px 15px;
+  border:1px solid #223149;
+  border-radius:13px;
+  background:#091321;
+}
+.previous-week-total span{color:#90a3bd}
+.previous-week-total strong{font-size:20px}
+@media(max-width:640px){
+  .week-history-nav{flex:0 0 auto}
+}

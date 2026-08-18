@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.12.5';
+const APP_VERSION = '3.12.6';
 
 
 
@@ -208,6 +208,15 @@ function paidHoursBetweenSession(r,endOverride=null){
   if(!r?.startAt||!end)return 0;
   return Math.max(0,hoursBetween(r.startAt,end)-mealDeductionMinutes(r,end)/60);
 }
+
+function formatHoursMinutes(decimalHours){
+  const totalMinutes=Math.max(0,Math.round((Number(decimalHours)||0)*60));
+  const hours=Math.floor(totalMinutes/60);
+  const minutes=totalMinutes%60;
+  if(hours===0) return `${minutes} min`;
+  if(minutes===0) return `${hours} h`;
+  return `${hours} h ${String(minutes).padStart(2,'0')} min`;
+}
 async function finalizeMealIfNeeded(){
  if(!currentOpenSession?.mealStartAt||currentOpenSession?.mealEndAt)return;
  const start=toDate(currentOpenSession.mealStartAt),elapsed=(Date.now()-start.getTime())/60000;if(elapsed<MEAL_MINUTES)return;
@@ -350,7 +359,7 @@ async function loadHistory(){
  else{try{const snap=await getDocs(query(collection(db,'punches'),where('userId','==',currentUser.uid)));myRows=snap.docs.map(d=>({id:d.id,...d.data()}));cacheHistory(myRows)}catch(e){myRows=cachedHistory();if(!myRows.length)throw e}}
 
   $('historyBody').innerHTML = myRows.length ? myRows.map(r=>{
-    const total = r.endAt ? paidHoursBetweenSession(r).toFixed(2)+' h' : 'En cours';
+    const total = r.endAt ? formatHoursMinutes(paidHoursBetweenSession(r)) : 'En cours';
     const meal = r.mealStartAt ? Math.round(mealDeductionMinutes(r,r.endAt||new Date())) : 0;
     return `<div class="history-card">
       <div class="history-card-head">
@@ -371,7 +380,7 @@ async function loadHistory(){
   document.querySelectorAll('[data-request-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.requestEdit,false));
   const now=new Date(),startToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=now.getDay(),startWeek=new Date(startToday);startWeek.setDate(startToday.getDate()-day);
   let today=0,week=0;for(const r of myRows){if(!r.startAt)continue;const s=toDate(r.startAt),end=r.endAt||Timestamp.fromDate(now),h=paidHoursBetweenSession(r,end);if(s>=startToday)today+=h;if(s>=startWeek)week+=h}
-  $('todayHours').textContent=today.toFixed(2)+' h';$('weekHours').textContent=week.toFixed(2)+' h';if($('overtimeHours'))$('overtimeHours').textContent='0 h';
+  $('todayHours').textContent=formatHoursMinutes(today);$('weekHours').textContent=formatHoursMinutes(week);if($('overtimeHours'))$('overtimeHours').textContent='0 h';
 }
 
 
@@ -402,9 +411,9 @@ function renderGroupedTimesheets(allRows){
     const dayHtml=[...days.values()].map(day=>{
       let dayTotal=0;
       const entries=day.rows.map(r=>{const h=r.endAt?paidHoursBetweenSession(r):0;dayTotal+=h;const meal=r.mealStartAt?`<span class="meal-chip">Repas -${Math.round(mealDeductionMinutes(r,r.endAt||new Date()))} min</span>`:'';return `<div class="time-entry"><div class="time-entry-main"><strong>${escapeHtml(r.siteName||'Sans chantier')}</strong><span>${escapeHtml(r.workType||'Type non précisé')}</span></div><div class="time-entry-hours"><span>${fmtTime(r.startAt)} → ${r.endAt?fmtTime(r.endAt):'En cours'}</span>${meal}<strong>${r.endAt?h.toFixed(2)+' h':'—'}</strong></div><button class="ghost compact" data-admin-edit="${r.id}">Modifier</button></div>`;}).join('');
-      return `<section class="timesheet-day"><div class="timesheet-day-head"><strong>${longFrDay(day.date)}</strong><span>${dayTotal.toFixed(2)} h</span></div>${entries}</section>`;
+      return `<section class="timesheet-day"><div class="timesheet-day-head"><strong>${longFrDay(day.date)}</strong><span>${formatHoursMinutes(dayTotal)}</span></div>${entries}</section>`;
     }).join('');
-    return `<article class="employee-timesheet"><div class="employee-timesheet-head"><div><h3>${escapeHtml(person.name)}</h3>${person.email?`<small>${escapeHtml(person.email)}</small>`:''}</div><div class="week-total"><span>Total semaine</span><strong>${weekTotal.toFixed(2)} h</strong></div></div>${dayHtml}</article>`;
+    return `<article class="employee-timesheet"><div class="employee-timesheet-head"><div><h3>${escapeHtml(person.name)}</h3>${person.email?`<small>${escapeHtml(person.email)}</small>`:''}</div><div class="week-total"><span>Total semaine</span><strong>${formatHoursMinutes(weekTotal)}</strong></div></div>${dayHtml}</article>`;
   }).join('');
 }
 function changePayWeek(delta){payWeekOffset+=delta;renderGroupedTimesheets(window.__adminRows||[]);document.querySelectorAll('[data-admin-edit]').forEach(b=>b.onclick=()=>openEditModal(b.dataset.adminEdit,true));}
@@ -494,7 +503,7 @@ function updateSplitPreview(){
   if(b<=a||d<=c){el.innerHTML='<span class="muted small">Chaque sortie doit être après son entrée.</span>';return;}
   if(c<b){el.innerHTML='<span class="muted small">Les deux périodes ne peuvent pas se chevaucher.</span>';return;}
   const h1=(b-a)/3600000,h2=(d-c)/3600000,total=h1+h2,gap=(c-b)/60000;
-  el.innerHTML=`<strong>Résultat du fractionnement</strong><br><span>Période 1 : ${a.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${b.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h1.toFixed(2)} h)</span><br><span>Période 2 : ${c.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${d.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${h2.toFixed(2)} h)</span><br>${gap>0?`<span class="muted small">Trou entre les périodes : ${Math.round(gap)} min</span><br>`:''}<strong>Total payé : ${total.toFixed(2)} h</strong>`;
+  el.innerHTML=`<strong>Résultat du fractionnement</strong><br><span>Période 1 : ${a.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${b.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${formatHoursMinutes(h1)})</span><br><span>Période 2 : ${c.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} → ${d.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})} (${formatHoursMinutes(h2)})</span><br>${gap>0?`<span class="muted small">Trou entre les périodes : ${Math.round(gap)} min</span><br>`:''}<strong>Total payé : ${formatHoursMinutes(total)}</strong>`;
 }
 function openEditModal(sessionId,asAdmin){
   const rows=asAdmin?(window.__adminRows||[]):myRows; editingSession=rows.find(r=>r.id===sessionId); if(!editingSession)return;
@@ -549,7 +558,7 @@ async function splitEditingPunch(){
     if(!task2)throw new Error('Choisis la tâche de la 2e période.');
 
     const h1=(p1End-p1Start)/3600000,h2=(p2End-p2Start)/3600000;
-    if(!confirm(`Créer 2 périodes totalisant ${(h1+h2).toFixed(2)} h ?`))return;
+    if(!confirm(`Créer 2 périodes totalisant ${formatHoursMinutes(h1+h2)} ?`))return;
 
     $('confirmSplitBtn').disabled=true; $('confirmSplitBtn').textContent='Fractionnement…';
 
@@ -693,7 +702,7 @@ function exportCsv(){
 
     const pushDayTotal=()=>{
       if(!currentDayKey) return;
-      lines.push([`TOTAL ${currentDayLabel.toUpperCase()}`,'','','','','','',currentDayTotal.toFixed(2)]);
+      lines.push([`TOTAL ${currentDayLabel.toUpperCase()}`,'','','','','','',formatHoursMinutes(currentDayTotal)]);
       currentDayTotal=0;
     };
 
@@ -725,12 +734,12 @@ function exportCsv(){
         fmtTime(r.startAt),
         r.endAt?fmtTime(r.endAt):'En cours',
         meal,
-        r.endAt?hours.toFixed(2):''
+        r.endAt?formatHoursMinutes(hours):''
       ]);
     }
 
     pushDayTotal();
-    lines.push(['TOTAL SEMAINE','','','','','','',total.toFixed(2)]);
+    lines.push(['TOTAL SEMAINE','','','','','','',formatHoursMinutes(total)]);
 
     // Séparer clairement les employés.
     if(i<employees.length-1){ lines.push([]); lines.push([]); }
@@ -967,7 +976,7 @@ async function v3approvals(){
   const rows=q.docs.map(d=>({id:d.id,...d.data()})).filter(p=>v3isClosedPunch(p)&&p.approved!==true).filter(foremanCanSeeRecord).sort((a,b)=>v3toMillis(v3startValue(a))-v3toMillis(v3startValue(b)));
   const groups=new Map();
   rows.forEach(p=>{const key=p.userId||p.userEmail||p.userName||'x';if(!groups.has(key))groups.set(key,{name:currentEmployeeName(userMap,p.userId,p.userName,p.userEmail),rows:[]});groups.get(key).rows.push(p);});
-  box.innerHTML=groups.size?[...groups.values()].map(g=>`<div class="approval-employee"><div class="approval-employee-head"><strong>${escapeHtml(g.name)}</strong><span>${g.rows.reduce((n,p)=>n+v3hours(p),0).toFixed(2)} h à approuver</span></div>${g.rows.map(p=>{const d=new Date(v3toMillis(v3startValue(p)));return `<div class="approval-item"><div><strong>${longFrDay(d)}</strong><span>${escapeHtml(p.siteName||p.site||'Chantier')} · ${fmtTime(v3startValue(p))} → ${fmtTime(v3endValue(p))}</span></div><strong>${v3hours(p).toFixed(2)} h</strong><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`}).join('')}</div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
+  box.innerHTML=groups.size?[...groups.values()].map(g=>`<div class="approval-employee"><div class="approval-employee-head"><strong>${escapeHtml(g.name)}</strong><span>${formatHoursMinutes(g.rows.reduce((n,p)=>n+v3hours(p),0))} à approuver</span></div>${g.rows.map(p=>{const d=new Date(v3toMillis(v3startValue(p)));return `<div class="approval-item"><div><strong>${longFrDay(d)}</strong><span>${escapeHtml(p.siteName||p.site||'Chantier')} · ${fmtTime(v3startValue(p))} → ${fmtTime(v3endValue(p))}</span></div><strong>${formatHoursMinutes(v3hours(p))} h</strong><button data-v3approve="${p.id}" class="btn-primary small">Approuver</button></div>`}).join('')}</div>`).join(""):'<p class="muted">Aucune heure en attente.</p>';
   box.querySelectorAll("[data-v3approve]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"punches",b.dataset.v3approve),{approved:true,approvedBy:auth.currentUser?.uid||"",approvedAt:serverTimestamp()});await v3approvals(); await v3reports();});
 }
 
@@ -976,7 +985,7 @@ async function v3reports(){
   const q=await getDocs(collection(db,"punches")), g={};
   q.docs.forEach(d=>{const p=d.data(), n=p.siteName||p.site||"Sans chantier"; if(!g[n])g[n]={h:0,a:0,c:0}; const h=v3hours(p); g[n].h+=h; if(p.approved===true)g[n].a+=h; g[n].c++;});
   const rows=Object.entries(g).sort((a,b)=>b[1].h-a[1].h);
-  box.innerHTML=rows.length?rows.map(([n,v])=>`<div class="report-item"><strong>${n}</strong><span>${v.h.toFixed(2)} h totales</span><span>${v.a.toFixed(2)} h approuvées</span><span>${v.c} punch(s)</span></div>`).join(""):'<p class="muted">Aucune donnée.</p>';
+  box.innerHTML=rows.length?rows.map(([n,v])=>`<div class="report-item"><strong>${n}</strong><span>${formatHoursMinutes(v.h)} totales</span><span>${formatHoursMinutes(v.a)} approuvées</span><span>${v.c} punch(s)</span></div>`).join(""):'<p class="muted">Aucune donnée.</p>';
 }
 
 async function v3exportPayroll(){
@@ -985,7 +994,7 @@ async function v3exportPayroll(){
   const out=[["Employé","Courriel","Chantier","Type de travail","Projet","Entrée","Sortie","Heures"]];
   rows.forEach(p=>{
     const a=new Date(v3toMillis(v3startValue(p))), b=new Date(v3toMillis(v3endValue(p)));
-    out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.workType||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),v3hours(p).toFixed(2)]);
+    out.push([p.userName||"",p.userEmail||"",p.siteName||p.site||"",p.workType||"",p.projectNumber||"",a.toLocaleString("fr-CA"),b.toLocaleString("fr-CA"),formatHoursMinutes(v3hours(p))]);
   });
   const csv=out.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
@@ -1588,9 +1597,9 @@ async function loadForemanPayrollPreview(){
     rows.forEach(p=>{const d=payrollRecordDate(p);const k=d?d.toISOString().slice(0,10):'x';(byDay[k]??=[]).push(p)});
     const days=Object.entries(byDay).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,rr])=>{
       const d=new Date(k+'T12:00:00'),dt=rr.reduce((s,p)=>s+payrollHours(p),0);
-      return `<div class="payroll-day"><div class="payroll-day-head"><strong>${d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'short'})}</strong><span>${dt.toFixed(2)} h</span></div>${rr.map(p=>`<div class="payroll-line"><strong>${escapeHtml(p.siteName||p.site||'Chantier')}</strong><div class="muted">Tâche : ${escapeHtml(payrollTaskLabel(p))}</div><div class="muted">${fmtDateTime(p.startAt||p.startTime||p.clockIn)} → ${fmtDateTime(p.endAt||p.endTime||p.clockOut)}</div><div class="muted">Repas : ${p.mealStartAt?30:0} min · ${payrollStatus(p)}</div></div>`).join('')}</div>`
+      return `<div class="payroll-day"><div class="payroll-day-head"><strong>${d.toLocaleDateString('fr-CA',{weekday:'long',day:'numeric',month:'short'})}</strong><span>${formatHoursMinutes(dt)}</span></div>${rr.map(p=>`<div class="payroll-line"><strong>${escapeHtml(p.siteName||p.site||'Chantier')}</strong><div class="muted">Tâche : ${escapeHtml(payrollTaskLabel(p))}</div><div class="muted">${fmtDateTime(p.startAt||p.startTime||p.clockIn)} → ${fmtDateTime(p.endAt||p.endTime||p.clockOut)}</div><div class="muted">Repas : ${p.mealStartAt?30:0} min · ${payrollStatus(p)}</div></div>`).join('')}</div>`
     }).join('');
-    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(u.name||u.email||'Employé')}</strong><span>${total.toFixed(2)} h</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
+    return `<div class="payroll-employee"><div class="payroll-employee-head"><strong>${escapeHtml(u.name||u.email||'Employé')}</strong><span>${formatHoursMinutes(total)}</span></div>${days||'<p class="muted small payroll-empty">Aucune heure cette semaine.</p>'}</div>`
   }).join('');
 }
 
@@ -1694,17 +1703,17 @@ async function exportForemanPayrollCsv(){
           a?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
           b?.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})||'',
           mealMinutes,
-          Number(seg.hours||0).toFixed(2),
+          formatHoursMinutes(Number(seg.hours||0)),
           payrollStatus(p)
         ]);
       });
 
       if(hasMultiple){
-        data.push(['TOTAL QUART','','','','','',payrollHours(p).toFixed(2),payrollStatus(p)]);
+        data.push(['TOTAL QUART','','','','','',formatHoursMinutes(payrollHours(p)),payrollStatus(p)]);
       }
     });
 
-    data.push(['TOTAL SEMAINE','','','','','',weeklyTotal.toFixed(2),'']);
+    data.push(['TOTAL SEMAINE','','','','','',formatHoursMinutes(weeklyTotal),'']);
     if(index<employeeIds.length-1){data.push([]);data.push([]);}
   });
 

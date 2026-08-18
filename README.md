@@ -1,9 +1,10 @@
-# Punch Emelco v3.12.5 — Filtre supervision corrigé
+# Punch Emelco v3.12.6 — Heures en heures/minutes
 
-Dans l’onglet Contremaître :
-- affiche la feuille du compte connecté;
-- affiche uniquement les personnes cochées dans « Employés supervisés »;
-- masque toute personne non sélectionnée;
-- même comportement pour Présents maintenant et Demandes de correction.
+Affichage modifié :
+- 1.50 h devient 1 h 30 min;
+- 8.75 h devient 8 h 45 min;
+- 4.93 h devient environ 4 h 56 min;
+- les calculs internes restent en heures décimales;
+- les totaux jour/semaine, durées et CSV sont affichés en heures + minutes réelles.
 
-Dans l’onglet Administration, un administrateur conserve la vue complète.
+Aucun autre fonctionnement n'est modifié.

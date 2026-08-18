@@ -1,10 +1,9 @@
-# Punch Emelco v3.12.4 — Total par jour dans le CSV
+# Punch Emelco v3.12.5 — Filtre supervision corrigé
 
-Le CSV conserve :
-- seulement la semaine sélectionnée;
-- les journées dans l'ordre dimanche → samedi;
-- les employés séparés;
-- le total de la semaine par employé.
+Dans l’onglet Contremaître :
+- affiche la feuille du compte connecté;
+- affiche uniquement les personnes cochées dans « Employés supervisés »;
+- masque toute personne non sélectionnée;
+- même comportement pour Présents maintenant et Demandes de correction.
 
-Ajout :
-- une ligne TOTAL pour chaque journée de chaque employé.
+Dans l’onglet Administration, un administrateur conserve la vue complète.

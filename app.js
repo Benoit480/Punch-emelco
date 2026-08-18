@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Ce compte devient automatiquement administrateur lors de sa prochaine connexion.
 const OWNER_EMAIL = 'benoit2568@hotmail.com';
-const APP_VERSION = '3.12.2';
+const APP_VERSION = '3.12.3';
 
 
 
@@ -640,10 +640,85 @@ async function reviewCorrection(id,approve){
 }
 
 function exportCsv(){
-  const rows=window.__adminRows||[],lines=[['Employé','Courriel','Date','Chantier','Type de travail','Entrée','Sortie','Total heures']];
-  for(const r of rows)lines.push([r.userName||'',r.userEmail||'',fmtDate(r.startAt),r.siteName||'',r.workType||'',fmtTime(r.startAt),fmtTime(r.endAt),r.endAt?paidHoursBetweenSession(r).toFixed(2):'']);
-  const csv=lines.map(a=>a.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n'),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='feuilles-de-temps.csv';a.click();URL.revokeObjectURL(a.href);
+  const allRows=window.__adminRows||[];
+  const start=startOfPayWeek(payWeekOffset), end=endOfPayWeek(payWeekOffset);
+
+  // Exporter uniquement la semaine actuellement affichée dans Feuilles de temps.
+  const rows=allRows
+    .filter(r=>{
+      if(!r.startAt) return false;
+      const d=toDate(r.startAt);
+      return d>=start && d<end;
+    })
+    .sort((a,b)=>{
+      const nameA=(a.userName||a.userEmail||'').toLocaleLowerCase('fr');
+      const nameB=(b.userName||b.userEmail||'').toLocaleLowerCase('fr');
+      const byName=nameA.localeCompare(nameB,'fr');
+      if(byName!==0) return byName;
+      return toDate(a.startAt)-toDate(b.startAt);
+    });
+
+  const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+  const lines=[];
+  const weekEnd=new Date(end.getTime()-86400000);
+
+  // En-tête de la seule semaine sélectionnée.
+  lines.push(['Semaine sélectionnée',`${shortFrDate(start)} au ${shortFrDate(weekEnd)}`]);
+  lines.push([]);
+
+  const byEmployee=new Map();
+  for(const r of rows){
+    const key=r.userId||r.userEmail||r.userName||'inconnu';
+    if(!byEmployee.has(key)) byEmployee.set(key,{
+      name:r.userName||r.userEmail||'Employé',
+      email:r.userEmail||'',
+      rows:[]
+    });
+    byEmployee.get(key).rows.push(r);
+  }
+
+  const employees=[...byEmployee.values()].sort((a,b)=>a.name.localeCompare(b.name,'fr'));
+  for(let i=0;i<employees.length;i++){
+    const person=employees[i];
+    person.rows.sort((a,b)=>toDate(a.startAt)-toDate(b.startAt));
+
+    lines.push(['Employé',person.name]);
+    lines.push(['Courriel',person.email]);
+    lines.push(['Journée','Date','Chantier','Tâche','Entrée','Sortie','Repas (min)','Total heures']);
+
+    let total=0;
+    for(const r of person.rows){
+      const d=toDate(r.startAt);
+      const hours=r.endAt?paidHoursBetweenSession(r):0;
+      total+=hours;
+      const meal=r.mealStartAt?Math.round(mealDeductionMinutes(r,r.endAt||new Date())):0;
+      lines.push([
+        d.toLocaleDateString('fr-CA',{weekday:'long'}),
+        fmtDate(r.startAt),
+        r.siteName||'',
+        r.workType||'',
+        fmtTime(r.startAt),
+        r.endAt?fmtTime(r.endAt):'En cours',
+        meal,
+        r.endAt?hours.toFixed(2):''
+      ]);
+    }
+    lines.push(['TOTAL SEMAINE','','','','','','',total.toFixed(2)]);
+
+    // Séparer clairement les employés.
+    if(i<employees.length-1){ lines.push([]); lines.push([]); }
+  }
+
+  if(!employees.length){
+    lines.push(['Aucune heure pour cette semaine.']);
+  }
+
+  const csv=lines.map(row=>row.map(quote).join(',')).join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  a.download=`feuilles-de-temps_${dateKey(start)}_${dateKey(weekEnd)}.csv`;
+  a.click();URL.revokeObjectURL(a.href);
 }
 async function refreshAll(){await loadSites();await findOpenSession();await loadHistory();if(canManageTime()&&navigator.onLine)await loadAdmin();updateSyncStatus()}
 
